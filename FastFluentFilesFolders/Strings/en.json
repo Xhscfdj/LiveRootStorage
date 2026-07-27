@@ -52,6 +52,7 @@
   "CmdNew": "New",
   "CmdNewFolder": "New Folder",
   "CmdShowMoreOptions": "Show More Options",
+  "CmdSort": "Sort",
   "MsgNoOptionsAvailable": "(No options available)",
   "MsgCannotLoadOptions": "(Cannot load options)",
   "TimeGroupedFoldersHeader": "Time-Grouped Folders",

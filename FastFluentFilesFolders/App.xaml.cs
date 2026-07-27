@@ -103,11 +103,13 @@ namespace FastFluentFilesFolders
 
 			PluginManager = Services.GetRequiredService<PluginManager>();
 			PluginManager.SetDispatcherQueue(dispatcher);
-			await PluginManager.LoadAllAsync();
 
 			_window = new Views.MainWindowView();
 			MainWindow = _window;
 			_window.Activate();
+
+			_ = PluginManager.LoadAllAsync();
+			_ = SharedViewModel.DeferredInitializeAsync();
 		}
     }
 }

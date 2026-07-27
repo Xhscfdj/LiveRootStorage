@@ -1,4 +1,6 @@
 using FastFluentFilesFolders.Extensions.Interfaces;
+using FastFluentFilesFolders.Models;
+using FastFluentFilesFolders.Services;
 using FastFluentFilesFolders.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -112,12 +114,20 @@ namespace FastFluentFilesFolders.Extensions.Extensions
 
         private async Task CompressTo(FileSystemNodeViewModel target, string format)
         {
+            var ext = format == "7z" ? ".7z" : ".zip";
+            var outputName = Path.GetFileNameWithoutExtension(target.Name) + ext;
+            var opItem = new FileOperationItem
+            {
+                Text = $"{_ctx.GetString("ArchivePlugin.Compress")} {outputName}",
+                FileCount = 1
+            };
+            FileOperationReporter.ReportOperation(opItem);
+
             try
             {
-                var ext = format == "7z" ? ".7z" : ".zip";
                 var outputPath = Path.Combine(
                     Path.GetDirectoryName(target.FullPath) ?? target.FullPath,
-                    Path.GetFileNameWithoutExtension(target.Name) + ext);
+                    outputName);
 
                 outputPath = GetUniquePath(outputPath);
 
@@ -149,6 +159,12 @@ namespace FastFluentFilesFolders.Extensions.Extensions
                 });
 
                 await NotifyItemCreatedAsync(outputPath, false);
+                _ctx!.UIDispatcherQueue.TryEnqueue(() =>
+                {
+                    opItem.Progress = 100;
+                    opItem.Process = "100%";
+                    opItem.RemainTime = "0";
+                });
 
                 await ShowMessageAsync(
                     _ctx!.GetString("ArchivePlugin.Success"),
@@ -158,12 +174,20 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ArchivePlugin] Compress failed: {ex.Message}");
+                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = "失败"; });
                 await ShowMessageAsync(_ctx!.GetString("ArchivePlugin.Failed"), ex.Message);
             }
         }
 
         private async Task ExtractArchive(FileSystemNodeViewModel target)
         {
+            var opItem = new FileOperationItem
+            {
+                Text = $"{_ctx!.GetString("ArchivePlugin.ExtractHere")}: {target.Name}",
+                FileCount = 1
+            };
+            FileOperationReporter.ReportOperation(opItem);
+
             try
             {
                 var destDir = Path.Combine(
@@ -187,6 +211,12 @@ namespace FastFluentFilesFolders.Extensions.Extensions
                 });
 
                 await NotifyItemCreatedAsync(destDir, true);
+                _ctx!.UIDispatcherQueue.TryEnqueue(() =>
+                {
+                    opItem.Progress = 100;
+                    opItem.Process = "100%";
+                    opItem.RemainTime = "0";
+                });
 
                 await ShowMessageAsync(
                     _ctx!.GetString("ArchivePlugin.Success"),
@@ -195,6 +225,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ArchivePlugin] Extract failed: {ex.Message}");
+                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = "失败"; });
                 await ShowMessageAsync(_ctx!.GetString("ArchivePlugin.Failed"), ex.Message);
             }
         }

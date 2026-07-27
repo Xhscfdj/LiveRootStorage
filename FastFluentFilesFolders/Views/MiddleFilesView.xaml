@@ -13,14 +13,23 @@
     x:Name="MFV"
     mc:Ignorable="d">
 
-    <Page.Resources>
+	<Page.Resources>
         <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <local:InvertBoolConverter x:Key="InvertBoolConverter"/>
         <local:InvertVisibilityConverter x:Key="InvertVisibilityConverter"/>
         <local:ExpandGlyphConverter x:Key="ExpandGlyphConverter"/>
 		<Style x:Key="ViewSizeButton" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
 			<Setter Property="Foreground" Value="{StaticResource AccentAAFillColorSecondaryBrush}" />
-
+		</Style>
+		<Style x:Key="ToolbarBtn" TargetType="Button">
+			<Setter Property="Width" Value="40"/>
+			<Setter Property="Height" Value="36"/>
+			<Setter Property="Padding" Value="8"/>
+			<Setter Property="Margin" Value="2,0"/>
+			<Setter Property="CornerRadius" Value="4"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="HorizontalContentAlignment" Value="Center"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
 		</Style>
 	</Page.Resources>
     <Grid>
@@ -30,6 +39,11 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <CommandBar HorizontalAlignment="Left" OverflowButtonVisibility="Collapsed" IsDynamicOverflowEnabled="False" x:Name="ToolbarCmd"/>
+            <uc:FileOperationsButton x:Name="FileOpsBtn" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"/>
+        </Grid>
 
         <uc:LrsTableView x:Name="FileGrid" Grid.Row="1"
               RowHeight="{Binding AppConfigs.MiddleFilesHeight}"

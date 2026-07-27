@@ -52,6 +52,7 @@
   "CmdNew": "新建",
   "CmdNewFolder": "新建文件夹",
   "CmdShowMoreOptions": "显示更多选项",
+  "CmdSort": "排序",
   "MsgNoOptionsAvailable": "(无可用选项)",
   "MsgCannotLoadOptions": "(无法加载选项)",
   "TimeGroupedFoldersHeader": "按时间分组文件夹",

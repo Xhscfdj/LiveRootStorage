@@ -1,6 +1,7 @@
-using FastFluentFilesFolders.Extensions;
+﻿using FastFluentFilesFolders.Extensions;
 using FastFluentFilesFolders.Extensions.Interfaces;
 using FastFluentFilesFolders.Helpers;
+using FastFluentFilesFolders.Models;
 using FastFluentFilesFolders.Services;
 using FastFluentFilesFolders.UserControls;
 using FastFluentFilesFolders.ViewModels;
@@ -15,6 +16,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.Foundation;
 using Windows.System;
 using WinRT.Interop;
 using WinUI.TableView;
@@ -28,6 +30,7 @@ namespace FastFluentFilesFolders.Views
         private readonly List<ICommandBarElement> _itemPluginItems = new();
         private readonly List<ICommandBarElement> _basePluginItems = new();
         private ObservableCollection<FileSystemNodeViewModel>? _watchedCollection;
+        private readonly ObservableCollection<FileOperationItem> _fileOperationItems = new();
         private static MultiLanguageStringsViewModel ML => App.ML;
 
         public MiddleFilesView()
@@ -42,6 +45,10 @@ namespace FastFluentFilesFolders.Views
             FileGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnFileGridKeyDown), true);
 
             App.SharedViewModel.RenameFocusRequested += OnRenameFocusRequested;
+
+            FileOperationReporter.OperationAdded += OnFileOperationReported;
+
+            BuildToolbar();
 
             var copyAccel = new KeyboardAccelerator { Key = VirtualKey.C, Modifiers = VirtualKeyModifiers.Control };
             copyAccel.Invoked += (_, args) => { args.Handled = true; OnCopyClick(null, null); };
@@ -133,34 +140,34 @@ namespace FastFluentFilesFolders.Views
 
         private void OnFileGridContextRequested(UIElement sender, ContextRequestedEventArgs args)
         {
-            if (args.TryGetPosition(sender, out var position))
-            {
-                var element = args.OriginalSource as DependencyObject;
-                TableViewRow? row = null;
-                while (element != null)
-                {
-                    if (element is TableViewRow r)
-                    {
-                        row = r;
-                        break;
-                    }
-                    element = VisualTreeHelper.GetParent(element);
-                }
+            args.TryGetPosition(sender, out var position);
 
-                if (row?.Content is FileSystemNodeViewModel item && !item.IsPlaceholder)
+            var element = args.OriginalSource as DependencyObject;
+            TableViewRow? row = null;
+            while (element != null)
+            {
+                if (element is TableViewRow r)
                 {
-                    if (!FileGrid.SelectedItems.Contains(item))
-                        FileGrid.SelectedItem = item;
-                    RebuildPluginItems(_itemContextFlyout, _itemPluginItems, item);
-                    _itemContextFlyout.ShowAt(row, new FlyoutShowOptions { Position = position });
+                    row = r;
+                    break;
                 }
-                else
-                {
-                    RebuildPluginItems(_baseContextFlyout, _basePluginItems, null);
-                    _baseContextFlyout.ShowAt(sender, new FlyoutShowOptions { Position = position });
-                }
-                args.Handled = true;
+                element = VisualTreeHelper.GetParent(element);
             }
+
+            if (row?.Content is FileSystemNodeViewModel item && !item.IsPlaceholder)
+            {
+                if (!FileGrid.SelectedItems.Contains(item))
+                    FileGrid.SelectedItem = item;
+                RebuildPluginItems(_itemContextFlyout, _itemPluginItems, item);
+                var t = sender.TransformToVisual(row);
+                _itemContextFlyout.ShowAt(row, new FlyoutShowOptions { Position = t.TransformPoint(position) });
+            }
+            else
+            {
+                RebuildPluginItems(_baseContextFlyout, _basePluginItems, null);
+                _baseContextFlyout.ShowAt(sender, new FlyoutShowOptions { Position = position });
+            }
+            args.Handled = true;
         }
 
         public void RefreshHeaders()
@@ -209,7 +216,7 @@ namespace FastFluentFilesFolders.Views
             var newBtn = new AppBarButton
             {
                 Label = ML.CmdNew,
-                Icon = new FontIcon { Glyph = "\uE710", FontSize = 16 },
+                Content = new ThemedIcon { Style = (Style)Application.Current.Resources["Icon.New"] },
                 Flyout = newSubMenu
             };
             flyout.SecondaryCommands.Add(newBtn);
@@ -220,6 +227,136 @@ namespace FastFluentFilesFolders.Views
             flyout.SecondaryCommands.Add(BuildShowMoreOptionsBtn(isItemMenu: false));
 
             return flyout;
+        }
+
+        private void OnSortNameAscClick(object s, RoutedEventArgs e) => FileGrid.SortBy("Name", true);
+        private void OnSortNameDescClick(object s, RoutedEventArgs e) => FileGrid.SortBy("Name", false);
+        private void OnSortModifiedDescClick(object s, RoutedEventArgs e) => FileGrid.SortBy("LastModifiedTime", false);
+        private void OnSortModifiedAscClick(object s, RoutedEventArgs e) => FileGrid.SortBy("LastModifiedTime", true);
+        private void OnSortCreatedDescClick(object s, RoutedEventArgs e) => FileGrid.SortBy("FirstCreatedTime", false);
+        private void OnSortCreatedAscClick(object s, RoutedEventArgs e) => FileGrid.SortBy("FirstCreatedTime", true);
+        private void OnSortSizeDescClick(object s, RoutedEventArgs e) => FileGrid.SortBy("ExactSize", false);
+        private void OnSortSizeAscClick(object s, RoutedEventArgs e) => FileGrid.SortBy("ExactSize", true);
+
+        private void BuildToolbar()
+        {
+            if (ToolbarCmd == null) return;
+
+            ToolbarCmd.PrimaryCommands.Add(TbIconBtn("Icon.Cut", ML.CmdCut, OnCutClick));
+            ToolbarCmd.PrimaryCommands.Add(TbIconBtn("Icon.Copy", ML.CmdCopy, OnCopyClick));
+            ToolbarCmd.PrimaryCommands.Add(TbIconBtn("Icon.Paste", ML.CmdPaste, OnPasteClick));
+            ToolbarCmd.PrimaryCommands.Add(TbIconBtn("Icon.Rename", ML.CmdRename, OnRenameClick));
+            ToolbarCmd.PrimaryCommands.Add(TbIconBtn("Icon.Delete", ML.CmdDelete, OnDeleteClick));
+            ToolbarCmd.PrimaryCommands.Add(TbRedBtn(ML.CmdPermanentDelete, OnPermanentDeleteClick));
+            ToolbarCmd.PrimaryCommands.Add(new AppBarSeparator());
+
+            var newBtn = TbLabelBtn("Icon.New", ML.CmdNew, null);
+            newBtn.Flyout = BuildNewToolbarFlyout();
+            ToolbarCmd.PrimaryCommands.Add(newBtn);
+
+            var sortBtn = TbLabelBtn("Icon.Sort", ML.CmdSort, null);
+            sortBtn.Flyout = BuildSortToolbarFlyout();
+            ToolbarCmd.PrimaryCommands.Add(sortBtn);
+
+            FileOpsBtn.SetItems(_fileOperationItems);
+        }
+
+        private static AppBarButton TbIconBtn(string styleKey, string tooltip, RoutedEventHandler? click)
+        {
+            var icon = new ThemedIcon();
+            icon.Style = (Style)Application.Current.Resources[styleKey];
+            var btn = new AppBarButton
+            {
+                Width = 40, Height = 40,
+                LabelPosition = CommandBarLabelPosition.Collapsed,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = new Viewbox { Child = icon, Width = 20, Height = 20 }
+            };
+            ToolTipService.SetToolTip(btn, tooltip);
+            if (click != null) btn.Click += click;
+            return btn;
+        }
+
+        private static AppBarButton TbLabelBtn(string styleKey, string label, RoutedEventHandler? click)
+        {
+            var icon = new ThemedIcon();
+            icon.Style = (Style)Application.Current.Resources[styleKey];
+            var stack = new StackPanel { Orientation = Orientation.Horizontal };
+            stack.Children.Add(new Viewbox { Child = icon, Width = 18, Height = 18 });
+            stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            stack.Children.Add(new FontIcon { Glyph = "\uE70D", FontSize = 10, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 });
+            var btn = new AppBarButton
+            {
+                LabelPosition = CommandBarLabelPosition.Collapsed,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = stack
+            };
+            if (click != null) btn.Click += click;
+            return btn;
+        }
+
+        private static AppBarButton TbRedBtn(string tooltip, RoutedEventHandler? click)
+        {
+            var fontIcon = new FontIcon { Glyph = "\uECC9", FontSize = 18, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 59, 48)) };
+            var btn = new AppBarButton
+            {
+                Width = 40, Height = 40,
+                LabelPosition = CommandBarLabelPosition.Collapsed,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = new Viewbox { Child = fontIcon, Width = 20, Height = 20 }
+            };
+            ToolTipService.SetToolTip(btn, tooltip);
+            if (click != null) btn.Click += click;
+            return btn;
+        }
+
+        private MenuFlyout BuildNewToolbarFlyout()
+        {
+            var flyout = new MenuFlyout();
+            flyout.Items.Add(SubMenuBtn(ML.NewTextDocument, "\uE7C3", OnNewTextDocumentClick));
+            flyout.Items.Add(SubMenuBtn(ML.NewShortcut, "\uE71B", OnNewShortcutClick));
+            flyout.Items.Add(SubMenuBtn(ML.NewFile, "\uE7C3", OnNewFileClick));
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(SubMenuBtn(ML.NewExcelSpreadsheet, "\uE9F9", OnNewExcelClick));
+            flyout.Items.Add(SubMenuBtn(ML.NewWordDocument, "\uE89A", OnNewWordClick));
+            flyout.Items.Add(SubMenuBtn(ML.NewPowerPointPresentation, "\uE8B4", OnNewPowerPointClick));
+            return flyout;
+        }
+
+        private MenuFlyout BuildSortToolbarFlyout()
+        {
+            var flyout = new MenuFlyout();
+            flyout.Items.Add(SortMenuItem(ML.SortNameAsc, OnSortNameAscClick));
+            flyout.Items.Add(SortMenuItem(ML.SortNameDesc, OnSortNameDescClick));
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(SortMenuItem(ML.SortModifiedDesc, OnSortModifiedDescClick));
+            flyout.Items.Add(SortMenuItem(ML.SortModifiedAsc, OnSortModifiedAscClick));
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(SortMenuItem(ML.SortCreatedDesc, OnSortCreatedDescClick));
+            flyout.Items.Add(SortMenuItem(ML.SortCreatedAsc, OnSortCreatedAscClick));
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(SortMenuItem(ML.SortSizeDesc, OnSortSizeDescClick));
+            flyout.Items.Add(SortMenuItem(ML.SortSizeAsc, OnSortSizeAscClick));
+            return flyout;
+        }
+
+        private static MenuFlyoutItem SortMenuItem(string text, RoutedEventHandler handler)
+        {
+            var item = new MenuFlyoutItem { Text = text };
+            item.Click += handler;
+            return item;
+        }
+
+        public void AddFileOperation(FileOperationItem item)
+        {
+            _fileOperationItems.Insert(0, item);
+        }
+
+        private void OnFileOperationReported(FileOperationItem item)
+        {
+            AddFileOperation(item);
         }
 
         private void RebuildPluginItems(CommandBarFlyout flyout, List<ICommandBarElement> tracker, FileSystemNodeViewModel? targetNode)
@@ -483,6 +620,8 @@ namespace FastFluentFilesFolders.Views
         private void OnCutClick(object sender, RoutedEventArgs e)
         {
             FinishItemOp();
+            // 测试: 剪切按钮是否被调用
+            AddFileOperation(new FileOperationItem { Text = "测试：剪切按钮被点击", FileCount = 1, Progress = 50, Process = "50%", RemainTime = "2秒", SizeText = "0 B" });
             var items = GetSelectedItems();
             if (items.Count > 0)
                 (this.DataContext as MainWindowViewModel)?.CutCommand.Execute(items);
@@ -498,7 +637,22 @@ namespace FastFluentFilesFolders.Views
         {
             _itemContextFlyout.Hide();
             _baseContextFlyout.Hide();
+            var pasteOp = new FileOperationItem
+            {
+                Text = App.ML.CmdPaste,
+                FileCount = 0,
+                Process = "0%",
+                RemainTime = "...",
+                SizeText = "..."
+            };
+            AddFileOperation(pasteOp);
             (this.DataContext as MainWindowViewModel)?.PasteCommand.Execute(null);
+            _ = Task.Delay(2000).ContinueWith(_ => DispatcherQueue.TryEnqueue(() =>
+            {
+                pasteOp.Progress = 100;
+                pasteOp.Process = "100%";
+                pasteOp.RemainTime = "0";
+            }));
         }
         private void OnRenameClick(object sender, RoutedEventArgs e)
         {
@@ -588,14 +742,28 @@ namespace FastFluentFilesFolders.Views
             _itemContextFlyout.Hide();
             var items = GetSelectedItems();
             if (items.Count > 0)
-                (this.DataContext as MainWindowViewModel)?.DeleteCommand.Execute(items);
+            {
+                foreach (var item in items)
+            {
+                var op = new FileOperationItem { Text = $"{App.ML.CmdDelete} {item.Name}", FileCount = 1, Progress = 100, Process = "100%", RemainTime = "0" };
+                AddFileOperation(op);
+            }
+            (this.DataContext as MainWindowViewModel)?.DeleteCommand.Execute(items);
         }
-        private void OnPermanentDeleteClick(object sender, RoutedEventArgs e)
+    }
+    private void OnPermanentDeleteClick(object sender, RoutedEventArgs e)
+    {
+        _itemContextFlyout.Hide();
+        var items = GetSelectedItems();
+        if (items.Count > 0)
         {
-            _itemContextFlyout.Hide();
-            var items = GetSelectedItems();
-            if (items.Count > 0)
-                (this.DataContext as MainWindowViewModel)?.PermanentDeleteCommand.Execute(items);
+            foreach (var item in items)
+            {
+                var op = new FileOperationItem { Text = $"{App.ML.CmdPermanentDelete} {item.Name}", FileCount = 1, Progress = 100, Process = "100%", RemainTime = "0" };
+                AddFileOperation(op);
+            }
+            (this.DataContext as MainWindowViewModel)?.PermanentDeleteCommand.Execute(items);
+            }
         }
         private void OnCopyPathClick(object sender, RoutedEventArgs e)
         {

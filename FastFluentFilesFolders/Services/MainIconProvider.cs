@@ -11,7 +11,8 @@ namespace FastFluentFilesFolders.Services
 	public class MainIconProvider
 	{
 		private readonly Configs _configs;
-		private IIconProvider _iconProvider;
+		private IIconProvider? _win32Provider;
+		private IIconProvider? _winrtProvider;
 
 		public MainIconProvider(Configs configs)
 		{
@@ -24,13 +25,14 @@ namespace FastFluentFilesFolders.Services
 
 			if (ShellIconHelper.IsSpecialFolder(fullPath) || !useWin32)
 			{
-				_iconProvider = new WindowsIconProvider();
+				_winrtProvider ??= new WindowsIconProvider();
+				return _winrtProvider.GetIconAsync(fullPath, isFolder, dispatcherQueue, size);
 			}
 			else
 			{
-				_iconProvider = new ShellIconHelper();
+				_win32Provider ??= new ShellIconHelper();
+				return _win32Provider.GetIconAsync(fullPath, isFolder, dispatcherQueue, size);
 			}
-			return _iconProvider.GetIconAsync(fullPath, isFolder, dispatcherQueue, size);
 		}
 
 		/// <summary>

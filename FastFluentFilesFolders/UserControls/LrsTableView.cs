@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Linq;
 using WinUI.TableView;
 using SD = WinUI.TableView.SortDirection;
@@ -36,6 +35,29 @@ namespace FastFluentFilesFolders.UserControls
             else
             {
                 ItemsSource = items;
+            }
+        }
+
+        public void SortBy(string sortPath, bool ascending)
+        {
+            if (_groupedSource != null && _groupedSource.Count > 0)
+            {
+                _groupedSource.SortWithinGroups(sortPath, ascending);
+                var s = ItemsSource;
+                ItemsSource = null;
+                ItemsSource = s;
+            }
+
+            foreach (var col in Columns)
+            {
+                if (col.SortMemberPath == sortPath)
+                {
+                    col.SortDirection = ascending ? SD.Ascending : SD.Descending;
+                }
+                else
+                {
+                    col.SortDirection = null;
+                }
             }
         }
 

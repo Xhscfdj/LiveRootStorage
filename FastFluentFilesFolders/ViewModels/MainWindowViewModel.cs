@@ -46,21 +46,32 @@ namespace FastFluentFilesFolders.ViewModels
 			GoUpCommand = new RelayCommand(GoUp);
 			if (configs.IconParallelLoadingCount != 0)
 				IconLoadSemaphore = new(configs.IconParallelLoadingCount, configs.IconParallelLoadingCount);
-			//在构造函数中，添加测试数据
-			//CurrentFolderContent.Add(new FileNodeViewModel(@"C:\test.txt", _iconProvider, _appConfigs, _uiDispatcherQueue));
-			//CurrentFolderContent.Add(new FileSystemNodeViewModel(@"C:\testfolder", _iconProvider, _appConfigs, _uiDispatcherQueue));
-			foreach (var drive in DriveInfo.GetDrives())
+		}
+
+		public async Task DeferredInitializeAsync()
+		{
+			try
 			{
-				if (drive.IsReady)  // 只添加就绪的驱动器
+				await _uiDispatcherQueue.EnqueueAsync(() =>
 				{
-					RootDirectories.Add(new FileSystemNodeViewModel(drive.RootDirectory.FullName, true, false, configs, uiDispatcherQueue, false));
-				}
+					foreach (var drive in DriveInfo.GetDrives())
+					{
+						if (drive.IsReady)
+						{
+							RootDirectories.Add(new FileSystemNodeViewModel(drive.RootDirectory.FullName, true, false, AppConfigs, _uiDispatcherQueue, true));
+						}
+					}
+					InitializePinnedShortcuts(AppConfigs, _uiDispatcherQueue);
+					if (Directory.Exists(AppConfigs.HomePageFullPath))
+						NavigateToPath(AppConfigs.HomePageFullPath);
+					else
+						SelectedFolder = RootDirectories.FirstOrDefault();
+				});
 			}
-			InitializePinnedShortcuts(configs, uiDispatcherQueue);
-			if (Directory.Exists(configs.HomePageFullPath))
-				NavigateToPath(configs.HomePageFullPath);
-			else
-				SelectedFolder = RootDirectories.FirstOrDefault();
+			catch (Exception ex)
+			{
+				Debug.WriteLine($"[DeferredInit] Failed: {ex.Message}");
+			}
 		}
 		[RelayCommand]
 		private void testFunction()
@@ -425,63 +436,56 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewFolder()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			AddNewItemToView(destDir, "新建文件夹", isDirectory: true);
+			await AddNewItemToViewAsync(destDir, "新建文件夹", isDirectory: true);
 			BreadcrumbRefreshRequested?.Invoke();
-			await Task.CompletedTask;
 		}
 
 		[RelayCommand]
 		private async Task NewTextDocument()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			AddNewItemToView(destDir, "新建文本文档.txt", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, "新建文本文档.txt", isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
-			await Task.CompletedTask;
 		}
 
 		[RelayCommand]
 		private async Task NewShortcut()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			AddNewItemToView(destDir, "新建快捷方式.lnk", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, "新建快捷方式.lnk", isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
-			await Task.CompletedTask;
 		}
 
 		[RelayCommand]
 		private async Task NewFile()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			AddNewItemToView(destDir, "新建文件", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, "新建文件", isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
-			await Task.CompletedTask;
 		}
 
 		[RelayCommand]
 		private async Task NewExcelSpreadsheet()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			AddNewItemToView(destDir, "新建Excel表格.xlsx", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, "新建Excel表格.xlsx", isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
-			await Task.CompletedTask;
 		}
 
 		[RelayCommand]
 		private async Task NewWordDocument()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			AddNewItemToView(destDir, "新建Word文档.docx", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, "新建Word文档.docx", isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
-			await Task.CompletedTask;
 		}
 
 		[RelayCommand]
 		private async Task NewPowerPointPresentation()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			AddNewItemToView(destDir, "新建PPT演示.pptx", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, "新建PPT演示.pptx", isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
-			await Task.CompletedTask;
 		}
 
 		// 若当前文件夹按时间分组，需在加入视图前同步补齐 LastModifiedTime 并设置分组键，
@@ -494,7 +498,7 @@ namespace FastFluentFilesFolders.ViewModels
 			node.SortByTime = Helpers.GroupedFileList.GetTimeGroup(node.LastModifiedTime);
 		}
 
-		private void AddNewItemToView(string destDir, string defaultName, bool isDirectory)
+		private async Task AddNewItemToViewAsync(string destDir, string defaultName, bool isDirectory)
 		{
 			var newPath = GenerateUniquePath(Path.Combine(destDir, defaultName));
 			if (isDirectory)
@@ -502,14 +506,19 @@ namespace FastFluentFilesFolders.ViewModels
 			else
 				File.Create(newPath).Dispose();
 
-			var node = new FileSystemNodeViewModel(newPath, isDirectory, false, _appConfigs, _uiDispatcherQueue, false);
-			_ = node.InitAsync(node.FullPath, isDirectory);
+			var node = new FileSystemNodeViewModel(newPath, isDirectory, false, AppConfigs, _uiDispatcherQueue, false);
 			PrepareNodeForGroupedView(node);
-			_uiDispatcherQueue.TryEnqueue(() =>
+			await _uiDispatcherQueue.EnqueueAsync(() =>
 			{
 				CurrentFolderContent.Add(node);
 				SelectedFolder?.Children.Add(node);
 			});
+			_ = node.InitAsync(node.FullPath, isDirectory);
+		}
+
+		private void AddNewItemToView(string destDir, string defaultName, bool isDirectory)
+		{
+			_ = AddNewItemToViewAsync(destDir, defaultName, isDirectory);
 		}
 
 		public async Task RefreshCurrentFolderAsync()
@@ -878,7 +887,7 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
 				{
-					var node = new FileSystemNodeViewModel(path, true, false, configs, uiDispatcherQueue, false);
+					var node = new FileSystemNodeViewModel(path, true, false, configs, uiDispatcherQueue, true);
 					PinnedShortcuts.Add(node);
 				}
 			}

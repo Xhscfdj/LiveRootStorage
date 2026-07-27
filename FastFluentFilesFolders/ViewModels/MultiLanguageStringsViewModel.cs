@@ -24,6 +24,7 @@ namespace FastFluentFilesFolders.ViewModels
             nameof(CmdProperties), nameof(NewTextDocument), nameof(NewShortcut), nameof(NewFile),
             nameof(NewExcelSpreadsheet), nameof(NewWordDocument), nameof(NewPowerPointPresentation),
             nameof(CmdNew), nameof(CmdNewFolder), nameof(CmdShowMoreOptions),
+            nameof(CmdSort),
             nameof(CmdOk), nameof(CmdCancel), nameof(PermanentDeleteConfirmTitle), nameof(PermanentDeleteConfirmMessage),
             nameof(MsgNoOptionsAvailable), nameof(MsgCannotLoadOptions),
             nameof(SortNameAsc), nameof(SortNameDesc), nameof(SortSizeDesc), nameof(SortSizeAsc),
@@ -95,6 +96,7 @@ namespace FastFluentFilesFolders.ViewModels
         public string CmdNew => _loc.GetString("CmdNew");
         public string CmdNewFolder => _loc.GetString("CmdNewFolder");
         public string CmdShowMoreOptions => _loc.GetString("CmdShowMoreOptions");
+        public string CmdSort => _loc.GetString("CmdSort");
         public string CmdOk => _loc.GetString("CmdOk");
         public string CmdCancel => _loc.GetString("CmdCancel");
         public string PermanentDeleteConfirmTitle => _loc.GetString("PermanentDeleteConfirmTitle");

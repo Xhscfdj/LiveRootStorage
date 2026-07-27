@@ -36,7 +36,7 @@
 
         <Grid Grid.Row="1" Grid.Column="2">
             <views:MiddleFilesView x:Name="MiddleFilesPanel" />
-            <views:SettingsView x:Name="SettingsPanelView" Visibility="Collapsed" />
+            <views:SettingsView x:Name="SettingsPanelView" x:Load="False" Visibility="Collapsed" />
         </Grid>
     </Grid>
 </Page>

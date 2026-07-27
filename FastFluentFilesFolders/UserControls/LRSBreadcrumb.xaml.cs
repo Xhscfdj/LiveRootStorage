@@ -123,17 +123,18 @@ namespace FastFluentFilesFolders.UserControls
         private Compositor _compositor;
         private CancellationTokenSource? _searchCts;
         private readonly ObservableCollection<SearchResultItem> _searchResults = new();
-        private Flyout _searchFlyout;
-        private TextBox _searchTextBox;
-        private ListView _searchResultsList;
-        private TextBlock _searchStatusText;
-        private Grid _searchContentGrid;
+        private Flyout _searchFlyout = null!;
+        private TextBox _searchTextBox = null!;
+        private ListView _searchResultsList = null!;
+        private TextBlock _searchStatusText = null!;
+        private Grid _searchContentGrid = null!;
+
+        private bool _searchFlyoutBuilt;
 
         public LRSBreadcrumb()
         {
             this.InitializeComponent();
             CopyPathCommand = new RelayCommand(ExecuteCopyPath);
-            BuildSearchFlyout();
 
             this.Loaded += (s, e) =>
             {
@@ -547,6 +548,12 @@ namespace FastFluentFilesFolders.UserControls
 
         private void OnSearchButtonClick(object sender, RoutedEventArgs e)
         {
+            if (!_searchFlyoutBuilt)
+            {
+                BuildSearchFlyout();
+                _searchFlyoutBuilt = true;
+            }
+
             _searchContentGrid.Width = AddressBarArea.ActualWidth;
             _searchResultsList.ItemsSource = _searchResults;
             _searchTextBox.Text = string.Empty;
