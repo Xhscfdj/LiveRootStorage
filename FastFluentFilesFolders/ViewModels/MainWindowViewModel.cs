@@ -46,31 +46,45 @@ namespace FastFluentFilesFolders.ViewModels
 			GoUpCommand = new RelayCommand(GoUp);
 			if (configs.IconParallelLoadingCount != 0)
 				IconLoadSemaphore = new(configs.IconParallelLoadingCount, configs.IconParallelLoadingCount);
+
+			foreach (var drive in DriveInfo.GetDrives())
+			{
+				if (drive.IsReady)
+				{
+					RootDirectories.Add(new FileSystemNodeViewModel(drive.RootDirectory.FullName, true, false, configs, uiDispatcherQueue, true));
+				}
+			}
+
+			if (RootDirectories.Count > 0)
+				SelectedFolder = RootDirectories[0];
 		}
 
 		public async Task DeferredInitializeAsync()
 		{
 			try
 			{
+				var pinnedPaths = await Task.Run(() => GetQuickAccessPinnedFolders());
 				await _uiDispatcherQueue.EnqueueAsync(() =>
 				{
-					foreach (var drive in DriveInfo.GetDrives())
+					foreach (var path in pinnedPaths)
 					{
-						if (drive.IsReady)
+						if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
 						{
-							RootDirectories.Add(new FileSystemNodeViewModel(drive.RootDirectory.FullName, true, false, AppConfigs, _uiDispatcherQueue, true));
+							PinnedShortcuts.Add(new FileSystemNodeViewModel(path, true, false, AppConfigs, _uiDispatcherQueue, true));
 						}
 					}
-					InitializePinnedShortcuts(AppConfigs, _uiDispatcherQueue);
+
 					if (Directory.Exists(AppConfigs.HomePageFullPath))
 						NavigateToPath(AppConfigs.HomePageFullPath);
-					else
-						SelectedFolder = RootDirectories.FirstOrDefault();
 				});
 			}
 			catch (Exception ex)
 			{
 				Debug.WriteLine($"[DeferredInit] Failed: {ex.Message}");
+			}
+			finally
+			{
+				await _uiDispatcherQueue.EnqueueAsync(() => IsReady = true);
 			}
 		}
 		[RelayCommand]
@@ -542,6 +556,7 @@ namespace FastFluentFilesFolders.ViewModels
 		[ObservableProperty] private bool _canGoBack;
 		[ObservableProperty] private bool _canGoForward;
 		[ObservableProperty] private bool _isSettingsOpen;
+		[ObservableProperty] private bool _isReady;
 
 		public Microsoft.UI.Xaml.Visibility FileTableVisibility => IsSettingsOpen ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
 		public Microsoft.UI.Xaml.Visibility SettingsVisibility => IsSettingsOpen ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;

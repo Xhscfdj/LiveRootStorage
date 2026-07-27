@@ -25,8 +25,9 @@ namespace FastFluentFilesFolders.Views
 {
     public sealed partial class MiddleFilesView : Page
     {
-        private readonly CommandBarFlyout _itemContextFlyout;
-        private readonly CommandBarFlyout _baseContextFlyout;
+        private CommandBarFlyout? _itemContextFlyout;
+        private CommandBarFlyout? _baseContextFlyout;
+        private bool _toolbarBuilt;
         private readonly List<ICommandBarElement> _itemPluginItems = new();
         private readonly List<ICommandBarElement> _basePluginItems = new();
         private ObservableCollection<FileSystemNodeViewModel>? _watchedCollection;
@@ -39,8 +40,7 @@ namespace FastFluentFilesFolders.Views
             RefreshHeaders();
             App.ML.PropertyChanged += (_, e) => RefreshHeaders();
             this.DataContext = App.SharedViewModel;
-            _itemContextFlyout = BuildItemContextFlyout();
-            _baseContextFlyout = BuildBaseContextFlyout();
+
             FileGrid.ContextRequested += OnFileGridContextRequested;
             FileGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnFileGridKeyDown), true);
 
@@ -48,7 +48,12 @@ namespace FastFluentFilesFolders.Views
 
             FileOperationReporter.OperationAdded += OnFileOperationReported;
 
-            BuildToolbar();
+            this.Loaded += (_, _) =>
+            {
+                if (_toolbarBuilt) return;
+                _toolbarBuilt = true;
+                BuildToolbar();
+            };
 
             var copyAccel = new KeyboardAccelerator { Key = VirtualKey.C, Modifiers = VirtualKeyModifiers.Control };
             copyAccel.Invoked += (_, args) => { args.Handled = true; OnCopyClick(null, null); };
@@ -156,6 +161,7 @@ namespace FastFluentFilesFolders.Views
 
             if (row?.Content is FileSystemNodeViewModel item && !item.IsPlaceholder)
             {
+                _itemContextFlyout ??= BuildItemContextFlyout();
                 if (!FileGrid.SelectedItems.Contains(item))
                     FileGrid.SelectedItem = item;
                 RebuildPluginItems(_itemContextFlyout, _itemPluginItems, item);
@@ -164,6 +170,7 @@ namespace FastFluentFilesFolders.Views
             }
             else
             {
+                _baseContextFlyout ??= BuildBaseContextFlyout();
                 RebuildPluginItems(_baseContextFlyout, _basePluginItems, null);
                 _baseContextFlyout.ShowAt(sender, new FlyoutShowOptions { Position = position });
             }
@@ -512,7 +519,7 @@ namespace FastFluentFilesFolders.Views
             var item = FileGrid.SelectedItem as FileSystemNodeViewModel;
             if (item == null) return;
             var hwnd = WindowNative.GetWindowHandle(App.MainWindow!);
-            PopulateNativeContextMenu(flyout, item.FullPath, hwnd, _itemContextFlyout, item);
+            PopulateNativeContextMenu(flyout, item.FullPath, hwnd, _itemContextFlyout!, item);
         }
 
         private void OnBaseShowMoreOptionsOpening(object? sender, object e)
@@ -523,7 +530,7 @@ namespace FastFluentFilesFolders.Views
             var path = vm?.SelectedFolder?.FullPath ?? vm?.CurrentBreadcrumbPath;
             if (string.IsNullOrEmpty(path)) return;
             var hwnd = WindowNative.GetWindowHandle(App.MainWindow!);
-            PopulateNativeContextMenu(flyout, path, hwnd, _baseContextFlyout, null);
+            PopulateNativeContextMenu(flyout, path, hwnd, _baseContextFlyout!, null);
         }
 
         private static void PopulateNativeContextMenu(MenuFlyout flyout, string path, IntPtr hwnd, CommandBarFlyout parentFlyout, FileSystemNodeViewModel? targetItem)
@@ -592,14 +599,14 @@ namespace FastFluentFilesFolders.Views
 
         private void FinishItemOp()
         {
-            _itemContextFlyout.Hide();
+            _itemContextFlyout?.Hide();
             foreach (var item in GetSelectedItems())
                 _ = item.RefreshAsync();
         }
 
         private void FinishBaseOp()
         {
-            _baseContextFlyout.Hide();
+            _baseContextFlyout?.Hide();
         }
 
         // === Click handlers ===
@@ -635,8 +642,8 @@ namespace FastFluentFilesFolders.Views
         }
         private void OnPasteClick(object sender, RoutedEventArgs e)
         {
-            _itemContextFlyout.Hide();
-            _baseContextFlyout.Hide();
+            _itemContextFlyout?.Hide();
+            _baseContextFlyout?.Hide();
             var pasteOp = new FileOperationItem
             {
                 Text = App.ML.CmdPaste,
@@ -656,7 +663,7 @@ namespace FastFluentFilesFolders.Views
         }
         private void OnRenameClick(object sender, RoutedEventArgs e)
         {
-            _itemContextFlyout.Hide();
+            _itemContextFlyout?.Hide();
             var items = GetSelectedItems();
             if (items.Count == 0) return;
             var item = items[0];
@@ -739,7 +746,7 @@ namespace FastFluentFilesFolders.Views
         }
         private void OnDeleteClick(object sender, RoutedEventArgs e)
         {
-            _itemContextFlyout.Hide();
+            _itemContextFlyout?.Hide();
             var items = GetSelectedItems();
             if (items.Count > 0)
             {
@@ -753,7 +760,7 @@ namespace FastFluentFilesFolders.Views
     }
     private void OnPermanentDeleteClick(object sender, RoutedEventArgs e)
     {
-        _itemContextFlyout.Hide();
+        _itemContextFlyout?.Hide();
         var items = GetSelectedItems();
         if (items.Count > 0)
         {

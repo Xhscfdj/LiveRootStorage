@@ -44,15 +44,6 @@ namespace FastFluentFilesFolders
         public static LocalizationService LocalizationService { get; private set; }
         public static MultiLanguageStringsViewModel ML { get; private set; }
         public static PluginManager PluginManager { get; private set; }
-        private static IServiceProvider ConfigureServices()
-        {
-			var services = new ServiceCollection();
-
-			services.AddSingleton<Configs>();
-			services.AddSingleton<IIconProvider, WindowsIconProvider>();
-
-			return services.BuildServiceProvider();
-		}
 		/// <summary>
 		/// Initializes the singleton application object.  This is the first line of authored code
 		/// executed, and as such is the logical equivalent of main() or WinMain().

@@ -15,47 +15,66 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <ctrls:NavigationView x:Name="MainNav" PaneDisplayMode="LeftCompact"
-                          IsBackButtonVisible="Collapsed"
-                          IsSettingsVisible="True"
-                          SelectionChanged="OnNavSelectionChanged">
-        <ctrls:NavigationView.PaneHeader>
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <FontIcon Glyph="&#xE838;" FontSize="16" />
-                <TextBlock Text="FastFluentFilesFolders" FontSize="14" FontWeight="SemiBold"
-                           VerticalAlignment="Center" Margin="4,0,0,0"/>
+    <Grid x:Name="RootGrid">
+        <ctrls:NavigationView x:Name="MainNav" PaneDisplayMode="LeftCompact"
+                              IsBackButtonVisible="Collapsed"
+                              IsSettingsVisible="True"
+                              SelectionChanged="OnNavSelectionChanged">
+            <ctrls:NavigationView.PaneHeader>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE838;" FontSize="16" />
+                    <TextBlock Text="FastFluentFilesFolders" FontSize="14" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="4,0,0,0"/>
+                </StackPanel>
+            </ctrls:NavigationView.PaneHeader>
+
+            <ctrls:NavigationView.MenuItems>
+                <ctrls:NavigationViewItem Icon="Folder" Content="文件浏览" Tag="explorer"/>
+                <ctrls:NavigationViewItem Icon="AllApps" Content="插件" Tag="plugins"/>
+            </ctrls:NavigationView.MenuItems>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TitleBar x:Name="AppTitleBar"
+                      Title="FastFluentFilesFolders" Subtitle="v1.0.1">
+                    <TitleBar.IconSource>
+                        <FontIconSource Glyph="&#xE838;"/>
+                    </TitleBar.IconSource>
+                </TitleBar>
+
+                <!-- Explorer Area: collapsed initially, shown when ready -->
+                <views:ExplorerPage x:Name="ExplorerArea" Grid.Row="1" Visibility="Collapsed" />
+
+                <!-- Frame for plugins/settings: lightweight pages with animation -->
+                <Frame x:Name="ContentFrame" Grid.Row="1" Visibility="Collapsed">
+                    <Frame.ContentTransitions>
+                        <TransitionCollection>
+                            <NavigationThemeTransition />
+                        </TransitionCollection>
+                    </Frame.ContentTransitions>
+                </Frame>
+            </Grid>
+        </ctrls:NavigationView>
+
+        <!-- 启动加载遮罩，覆盖全窗口（包括 NavigationView 面板） -->
+        <Border x:Name="SplashOverlay" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16">
+                <ProgressRing IsActive="True" Width="48" Height="48"
+                              Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                <TextBlock Text="FastFluentFilesFolders" FontSize="18" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
             </StackPanel>
-        </ctrls:NavigationView.PaneHeader>
-
-        <ctrls:NavigationView.MenuItems>
-            <ctrls:NavigationViewItem Icon="Folder" Content="文件浏览" Tag="explorer"/>
-            <ctrls:NavigationViewItem Icon="AllApps" Content="插件" Tag="plugins"/>
-        </ctrls:NavigationView.MenuItems>
-
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <TitleBar x:Name="AppTitleBar"
-                  Title="FastFluentFilesFolders" Subtitle="v1.0.0-β">
-                <TitleBar.IconSource>
-                    <FontIconSource Glyph="&#xE838;"/>
-                </TitleBar.IconSource>
-            </TitleBar>
-
-            <!-- Explorer Area: pre-loaded, visibility toggled (no animation to avoid lag) -->
-            <views:ExplorerPage x:Name="ExplorerArea" Grid.Row="1" Visibility="Visible" />
-
-            <!-- Frame for plugins/settings: lightweight pages with animation -->
-            <Frame x:Name="ContentFrame" Grid.Row="1" Visibility="Collapsed">
-                <Frame.ContentTransitions>
-                    <TransitionCollection>
-                        <NavigationThemeTransition />
-                    </TransitionCollection>
-                </Frame.ContentTransitions>
-            </Frame>
-        </Grid>
-    </ctrls:NavigationView>
+            <Border.Resources>
+                <Storyboard x:Name="SplashFadeOut" Completed="OnSplashFadeOutCompleted">
+                    <DoubleAnimation Storyboard.TargetName="SplashOverlay"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="1" To="0" Duration="0:0:0.3"/>
+                </Storyboard>
+            </Border.Resources>
+        </Border>
+    </Grid>
 </Window>

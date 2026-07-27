@@ -28,6 +28,16 @@ namespace FastFluentFilesFolders.Views
                 else
                     NavigateTo("explorer");
             }
+            else if (e.PropertyName == nameof(MainWindowViewModel.IsReady) && VM.IsReady)
+            {
+                ExplorerArea.Visibility = Visibility.Visible;
+                SplashFadeOut.Begin();
+            }
+        }
+
+        private void OnSplashFadeOutCompleted(object sender, object e)
+        {
+            SplashOverlay.Visibility = Visibility.Collapsed;
         }
 
         private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
