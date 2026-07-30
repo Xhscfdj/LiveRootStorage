@@ -4,13 +4,14 @@ English | [中文](README-zh.md)
 
 A modern file explorer for Windows, built with WinUI 3 and the Windows App SDK.
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://www.microsoft.com/windows)
+
 ## Something...
 This project won't auto-update (v1.0.1 and below).  
 If you want to see new versions, please visit this repo, thank you!
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://www.microsoft.com/windows)
 ## I want a starrrrrrrrrrr
 If you like it, please give me a starrrrr⭐, thank youuuuuuuuuu DA⭐ZE!!! 
 
