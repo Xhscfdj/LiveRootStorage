@@ -8,6 +8,9 @@
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://www.microsoft.com/windows)
 
+## 哦对了
+这个项目小于等于v1.0.1(包括1.0.1)版本没有自动更新功能，请访问该项目地址以获取最新更新DA⭐ZE
+
 ## 咱想要starrrrrrrrr
 球球了!
 喜欢的话,就给个starrr☆rrrats吧喵~
