@@ -11,14 +11,9 @@
     xmlns:ccl="using:CommunityToolkit.WinUI.Controls"
     xmlns:vm="using:FastFluentFilesFolders.ViewModels"
     mc:Ignorable="d"
-    NavigationCacheMode="Required"
-    IsTabStop="True"
-    KeyDown="OnSettingsViewKeyDown">
+    NavigationCacheMode="Disabled"
+    IsTabStop="True">
 	<Grid>
-		<Grid.RowDefinitions>
-			<RowDefinition Height="*"    />
-			<RowDefinition Height="Auto" />
-		</Grid.RowDefinitions>
 		<ScrollViewer>
 			<StackPanel Padding="24" Spacing="14" HorizontalAlignment="Stretch" x:Name="SettingsStack">
 				<TextBlock Text="{Binding ML.SettingsTitle}"  Style="{StaticResource TitleTextBlockStyle}"/>
@@ -56,16 +51,25 @@
 
 				<!--Appearance-->
 				<TextBlock Text="{Binding ML.AppearanceSection}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,0" />
-				<ccl:SettingsCard Header="{Binding ML.MiddleFilesHeight}">
-					<ccl:SettingsCard.HeaderIcon>
-						<FontIcon Glyph="&#xE752;" />
-					</ccl:SettingsCard.HeaderIcon>
-					<ctrls:NumberBox Value="{Binding AppConfigs.MiddleFilesHeight, Mode=TwoWay}"
-									 Minimum="20" Maximum="200"
-									 SpinButtonPlacementMode="Inline" />
-				</ccl:SettingsCard>
+                <ccl:SettingsCard Header="{Binding ML.MiddleFilesHeight}">
+                    <ccl:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE752;" />
+                    </ccl:SettingsCard.HeaderIcon>
+                    <ctrls:NumberBox Value="{Binding AppConfigs.MiddleFilesHeight, Mode=TwoWay}"
+                                     Minimum="20" Maximum="200"
+                                     SpinButtonPlacementMode="Inline" />
+                </ccl:SettingsCard>
 
-				<TextBlock Text="{Binding ML.AdvancedSection}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,12,0,0" />
+                <ccl:SettingsCard Header="{Binding ML.SystemBackdropMode}">
+                    <ccl:SettingsCard.HeaderIcon>
+						<FontIcon Glyph="&#xEF1F;" />
+                    </ccl:SettingsCard.HeaderIcon>
+                    <ComboBox ItemsSource="{Binding BackdropOptions}"
+                              SelectedItem="{Binding SelectedBackdrop, Mode=TwoWay}"
+                              DisplayMemberPath="DisplayName" />
+                </ccl:SettingsCard>
+
+                <TextBlock Text="{Binding ML.AdvancedSection}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,12,0,0" />
 				<ccl:SettingsCard Header="{Binding ML.UseWin32Icon}">
 					<ccl:SettingsCard.HeaderIcon>
 						<FontIcon Glyph="&#xE770;"/>
@@ -187,12 +191,12 @@
 				<ccl:SettingsExpander>
 					<ccl:SettingsExpander.Header>
 						<StackPanel>
-							<TextBlock Text="FastFluentFilesFolders" />
-							<TextBlock Text="By Xhscfdj" Foreground="Gray" FontSize="14"/>
+							<TextBlock Text="{Binding ML.AppName}" />
+                <TextBlock Text="{Binding ML.AppAuthorCredit}" Foreground="Gray" FontSize="14"/>
 						</StackPanel>
 					</ccl:SettingsExpander.Header>
 					<ccl:SettingsExpander.Content>
-						<TextBlock Text="1.0.0-beta" />
+						<TextBlock Text="{Binding ML.AppVersion}" />
 					</ccl:SettingsExpander.Content>
 					<ccl:SettingsExpander.HeaderIcon>
 						<FontIcon Glyph="&#xE946;" />
@@ -218,8 +222,5 @@
 				</ccl:SettingsExpander>
 			</StackPanel>
 		</ScrollViewer>
-		<Button x:Name="SaveButton" Click="SaveSettings" Margin="14,12,0,0"
-				Grid.Row="1" Style="{StaticResource AccentButtonStyle}"
-                HorizontalAlignment="Left" Content="{Binding ML.SaveSettings}"/>
 	</Grid>
 </Page>

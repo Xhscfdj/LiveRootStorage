@@ -174,7 +174,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ArchivePlugin] Compress failed: {ex.Message}");
-                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = "失败"; });
+                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = _ctx.GetString("ArchivePlugin.Failed"); });
                 await ShowMessageAsync(_ctx!.GetString("ArchivePlugin.Failed"), ex.Message);
             }
         }
@@ -225,7 +225,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ArchivePlugin] Extract failed: {ex.Message}");
-                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = "失败"; });
+                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = _ctx.GetString("ArchivePlugin.Failed"); });
                 await ShowMessageAsync(_ctx!.GetString("ArchivePlugin.Failed"), ex.Message);
             }
         }
@@ -649,7 +649,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
                 {
                     Title = title,
                     Content = message,
-                    CloseButtonText = "OK",
+                    CloseButtonText = _ctx.GetString("CmdOk"),
                     XamlRoot = App.MainWindow!.Content.XamlRoot,
                     DefaultButton = ContentDialogButton.Close
                 };

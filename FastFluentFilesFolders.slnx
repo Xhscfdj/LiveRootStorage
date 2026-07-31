@@ -4,8 +4,12 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="FastFluentFilesFolders.TableView/FastFluentFilesFolders.TableView.csproj" />
+  <Project Path="FastFluentFilesFolders.TableView/FastFluentFilesFolders.TableView.csproj">
+    <BuildType Solution="Debug|x64" Project="Release" />
+    <Platform Solution="Release|x64" Project="x64" />
+  </Project>
   <Project Path="FastFluentFilesFolders/FastFluentFilesFolders.csproj">
+    <BuildType Solution="Debug|x64" Project="Release" />
     <Platform Solution="*|ARM64" Project="ARM64" />
     <Platform Solution="*|x64" Project="x64" />
     <Platform Solution="*|x86" Project="x86" />

@@ -31,6 +31,7 @@ namespace FastFluentFilesFolders.Views
         private readonly List<ICommandBarElement> _itemPluginItems = new();
         private readonly List<ICommandBarElement> _basePluginItems = new();
         private ObservableCollection<FileSystemNodeViewModel>? _watchedCollection;
+        private MainWindowViewModel? _dataContextVm;
         private readonly ObservableCollection<FileOperationItem> _fileOperationItems = new();
         private static MultiLanguageStringsViewModel ML => App.ML;
 
@@ -38,7 +39,7 @@ namespace FastFluentFilesFolders.Views
         {
             InitializeComponent();
             RefreshHeaders();
-            App.ML.PropertyChanged += (_, e) => RefreshHeaders();
+            App.ML.PropertyChanged += OnMLPropertyChanged;
             this.DataContext = App.SharedViewModel;
 
             FileGrid.ContextRequested += OnFileGridContextRequested;
@@ -54,6 +55,7 @@ namespace FastFluentFilesFolders.Views
                 _toolbarBuilt = true;
                 BuildToolbar();
             };
+            this.Unloaded += OnUnloaded;
 
             var copyAccel = new KeyboardAccelerator { Key = VirtualKey.C, Modifiers = VirtualKeyModifiers.Control };
             copyAccel.Invoked += (_, args) => { args.Handled = true; OnCopyClick(null, null); };
@@ -69,17 +71,35 @@ namespace FastFluentFilesFolders.Views
 
             this.DataContextChanged += (s, e) =>
             {
-                if (this.DataContext is MainWindowViewModel vm)
+                if (this.DataContext is MainWindowViewModel vm && vm != _dataContextVm)
                 {
+                    if (_dataContextVm != null)
+                        _dataContextVm.PropertyChanged -= OnViewModelPropertyChanged;
+                    _dataContextVm = vm;
                     vm.PropertyChanged += OnViewModelPropertyChanged;
                     UpdateGroupedSource(vm);
                 }
             };
             if (this.DataContext is MainWindowViewModel currentVm)
             {
+                _dataContextVm = currentVm;
                 currentVm.PropertyChanged += OnViewModelPropertyChanged;
                 UpdateGroupedSource(currentVm);
             }
+        }
+
+        private void OnMLPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => RefreshAllStrings();
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            App.ML.PropertyChanged -= OnMLPropertyChanged;
+            App.SharedViewModel.RenameFocusRequested -= OnRenameFocusRequested;
+            FileOperationReporter.OperationAdded -= OnFileOperationReported;
+            if (_dataContextVm != null)
+                _dataContextVm.PropertyChanged -= OnViewModelPropertyChanged;
+            if (_watchedCollection != null)
+                _watchedCollection.CollectionChanged -= OnCurrentFolderCollectionChanged;
+            this.Unloaded -= OnUnloaded;
         }
 
         private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -183,6 +203,28 @@ namespace FastFluentFilesFolders.Views
             ColModifiedDate.Header = ML.ColumnModifiedDate;
             ColCreatedDate.Header = ML.ColumnCreatedDate;
             ColSize.Header = ML.ColumnSize;
+        }
+
+        private void RefreshAllStrings()
+        {
+            RefreshHeaders();
+            RefreshToolbar();
+            RefreshGroupHeaderNames();
+            _itemContextFlyout = null;
+            _baseContextFlyout = null;
+        }
+
+        private void RefreshToolbar()
+        {
+            if (!_toolbarBuilt) return;
+            ToolbarCmd.PrimaryCommands.Clear();
+            BuildToolbar();
+        }
+
+        private void RefreshGroupHeaderNames()
+        {
+            if (FileGrid.ItemsSource is GroupedFileList list)
+                list.RefreshHeaderNames();
         }
 
         private CommandBarFlyout BuildItemContextFlyout()
@@ -627,8 +669,6 @@ namespace FastFluentFilesFolders.Views
         private void OnCutClick(object sender, RoutedEventArgs e)
         {
             FinishItemOp();
-            // 测试: 剪切按钮是否被调用
-            AddFileOperation(new FileOperationItem { Text = "测试：剪切按钮被点击", FileCount = 1, Progress = 50, Process = "50%", RemainTime = "2秒", SizeText = "0 B" });
             var items = GetSelectedItems();
             if (items.Count > 0)
                 (this.DataContext as MainWindowViewModel)?.CutCommand.Execute(items);

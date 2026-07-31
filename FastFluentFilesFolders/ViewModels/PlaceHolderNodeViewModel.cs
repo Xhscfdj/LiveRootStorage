@@ -7,7 +7,7 @@ namespace FastFluentFilesFolders.ViewModels
 		public PlaceholderNodeViewModel() : base("C:\\", false, true, null, null, true)
 		{
 			IsPlaceholder = true;
-			Name = "Loading...";
+			Name = App.ML?.SearchLoading ?? "Loading...";
 		}
 	}
 }

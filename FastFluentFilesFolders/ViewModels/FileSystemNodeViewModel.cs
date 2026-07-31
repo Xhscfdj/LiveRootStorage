@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.WinUI;
-//using Isg.Collections;
+
 using FastFluentFilesFolders.Services;
 using FastFluentFilesFolders.Extensions;
 using FastFluentFilesFolders.Extensions.Interfaces;
@@ -27,6 +27,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private bool _isInited;
 		private bool _isLazyLoad;
 		private bool _hasBasicInfo;
+		public bool IsStandalone { get; set; }
 
 		// 限制“缓存未命中”时的图标解码并发，防止阻塞式 Shell 调用耗尽线程池而卡顿
 		private static readonly System.Threading.SemaphoreSlim _iconLoadGate =
@@ -48,7 +49,7 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			get
 			{
-				if (!_iconRequested && !IsPlaceholder && IconProvider != null && _uiDispatcherQueue != null)
+				if (!_iconRequested && !IsPlaceholder && App.SharedIconProvider != null && _uiDispatcherQueue != null)
 				{
 					_iconRequested = true;
 					_uiDispatcherQueue.TryEnqueue(() => _ = LoadIconAsync(FullPath, IsDirectory));
@@ -57,7 +58,6 @@ namespace FastFluentFilesFolders.ViewModels
 			}
 			set => SetProperty(ref _icon, value);
 		}
-		[ObservableProperty] private MainIconProvider _iconProvider;
 		[ObservableProperty] private long _exactSize = 0;
 		[ObservableProperty] private string _visualSize = "0B";
 		[ObservableProperty] private DateTime _lastModifiedTime = DateTime.MinValue;
@@ -123,7 +123,12 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 
 		// 树形结构相关（文件夹特有，文件则为空）
-		[ObservableProperty] private ObservableCollection<FileSystemNodeViewModel> _children = [];
+		private ObservableCollection<FileSystemNodeViewModel>? _children;
+		public ObservableCollection<FileSystemNodeViewModel> Children
+		{
+			get => _children ??= [];
+			set => SetProperty(ref _children, value);
+		}
 		[ObservableProperty] private string _childrenCountText = string.Empty;
 		private int? _cachedChildrenCount;
 
@@ -146,7 +151,6 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				_configs = configs;
 			}
-			_iconProvider = new MainIconProvider(configs);
 			FullPath = fullPath;
 			IsDirectory = isDirectory;
 			// 设置名称和扩展名
@@ -355,11 +359,12 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			try
 			{
-				if (IconProvider == null) return;
+				var provider = App.SharedIconProvider;
+				if (provider == null) return;
 				_iconRequested = true;
 
 				// 快速路径：命中缓存直接赋值，省去线程切换与重复解码
-				if (IconProvider.TryGetCachedIcon(fullPath, isDirectory, out var cached) && cached != null)
+				if (provider.TryGetCachedIcon(fullPath, isDirectory, out var cached) && cached != null)
 				{
 					if (_uiDispatcherQueue.HasThreadAccess)
 						Icon = cached;
@@ -377,7 +382,7 @@ namespace FastFluentFilesFolders.ViewModels
 				{
 					await Task.Run( async () =>
 					{
-						var task = IconProvider.GetIconAsync(fullPath, isDirectory, _uiDispatcherQueue, 32);
+						var task = provider.GetIconAsync(fullPath, isDirectory, _uiDispatcherQueue, 24);
 						if (task != null) icon = await task;
 					});
 				}

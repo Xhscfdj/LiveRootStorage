@@ -31,7 +31,27 @@ namespace FastFluentFilesFolders.ViewModels
             nameof(SortModifiedDesc), nameof(SortModifiedAsc), nameof(SortCreatedDesc), nameof(SortCreatedAsc),
             nameof(TimeGroupedFoldersHeader), nameof(TimeGroupedFolderPlaceholder), nameof(AddTimeGroupedFolder),
             nameof(PluginsSection),
+            nameof(SystemBackdropMode), nameof(BackdropMica), nameof(BackdropMicaAlt),
+            nameof(BackdropAcrylic), nameof(BackdropAcrylicThin), nameof(BackdropNone),
             nameof(PluginManagement), nameof(PluginImport), nameof(PluginImportBtn), nameof(PluginInstalled),
+            nameof(NavExplorer), nameof(NavPlugins), nameof(AppAuthorCredit),
+            nameof(PluginsPageTitle), nameof(PluginsSettingsHeader),
+            nameof(TooltipBack), nameof(TooltipForward), nameof(TooltipUp), nameof(TooltipRefresh),
+            nameof(TooltipHome), nameof(TooltipSearch), nameof(TooltipCopyPath),
+            nameof(SearchPlaceholder), nameof(SearchStartHint), nameof(SearchLoading),
+            nameof(SearchNoResults), nameof(SearchInProgress),
+            nameof(FlyoutEmptyFolder), nameof(FlyoutInaccessible),
+            nameof(PropertiesTitle), nameof(PropertiesType), nameof(PropertiesPath),
+            nameof(PropertiesSize), nameof(PropertiesModified), nameof(PropertiesCreated),
+            nameof(PropertiesClose), nameof(PropertiesFolder), nameof(PropertiesFile), nameof(PropertiesBytesFmt),
+            nameof(FileOpProgressFmt),
+            nameof(NewFileDefault), nameof(NewFolderDefault), nameof(NewTextDocumentDefault),
+            nameof(NewShortcutDefault), nameof(NewExcelDefault), nameof(NewWordDefault), nameof(NewPPTDefault),
+            nameof(AppName), nameof(AppVersion),
+            nameof(LanguageChinese), nameof(LanguageEnglish), nameof(LanguageFumo),
+            nameof(TimeGroupToday), nameof(TimeGroupYesterday), nameof(TimeGroupEarlierThisWeek),
+            nameof(TimeGroupLastWeek), nameof(TimeGroupEarlierThisMonth), nameof(TimeGroupLastMonth),
+            nameof(TimeGroupEarlierThisYear), nameof(TimeGroupLastYear), nameof(TimeGroupLongAgo),
         };
 
         public MultiLanguageStringsViewModel(LocalizationService loc)
@@ -119,10 +139,76 @@ namespace FastFluentFilesFolders.ViewModels
 
         public string PluginsSection => _loc.GetString("PluginsSection");
 
+        public string SystemBackdropMode => _loc.GetString("SystemBackdropMode");
+        public string BackdropMica => _loc.GetString("BackdropMica");
+        public string BackdropMicaAlt => _loc.GetString("BackdropMicaAlt");
+        public string BackdropAcrylic => _loc.GetString("BackdropAcrylic");
+        public string BackdropAcrylicThin => _loc.GetString("BackdropAcrylicThin");
+        public string BackdropNone => _loc.GetString("BackdropNone");
+
         public string PluginManagement => _loc.GetString("PluginManagement");
         public string PluginImport => _loc.GetString("PluginImport");
         public string PluginImportBtn => _loc.GetString("PluginImportBtn");
         public string PluginInstalled => _loc.GetString("PluginInstalled");
+
+        public string NavExplorer => _loc.GetString("NavExplorer");
+        public string NavPlugins => _loc.GetString("NavPlugins");
+        public string AppAuthorCredit => _loc.GetString("AppAuthorCredit");
+        public string PluginsPageTitle => _loc.GetString("PluginsPageTitle");
+        public string PluginsSettingsHeader => _loc.GetString("PluginsSettingsHeader");
+
+        public string TooltipBack => _loc.GetString("TooltipBack");
+        public string TooltipForward => _loc.GetString("TooltipForward");
+        public string TooltipUp => _loc.GetString("TooltipUp");
+        public string TooltipRefresh => _loc.GetString("TooltipRefresh");
+        public string TooltipHome => _loc.GetString("TooltipHome");
+        public string TooltipSearch => _loc.GetString("TooltipSearch");
+        public string TooltipCopyPath => _loc.GetString("TooltipCopyPath");
+
+        public string SearchPlaceholder => _loc.GetString("SearchPlaceholder");
+        public string SearchStartHint => _loc.GetString("SearchStartHint");
+        public string SearchLoading => _loc.GetString("SearchLoading");
+        public string SearchNoResults => _loc.GetString("SearchNoResults");
+        public string SearchInProgress => _loc.GetString("SearchInProgress");
+        public string FlyoutEmptyFolder => _loc.GetString("FlyoutEmptyFolder");
+        public string FlyoutInaccessible => _loc.GetString("FlyoutInaccessible");
+
+        public string PropertiesTitle => _loc.GetString("PropertiesTitle");
+        public string PropertiesType => _loc.GetString("PropertiesType");
+        public string PropertiesPath => _loc.GetString("PropertiesPath");
+        public string PropertiesSize => _loc.GetString("PropertiesSize");
+        public string PropertiesModified => _loc.GetString("PropertiesModified");
+        public string PropertiesCreated => _loc.GetString("PropertiesCreated");
+        public string PropertiesClose => _loc.GetString("PropertiesClose");
+        public string PropertiesFolder => _loc.GetString("PropertiesFolder");
+        public string PropertiesFile => _loc.GetString("PropertiesFile");
+        public string PropertiesBytesFmt => _loc.GetString("PropertiesBytesFmt");
+        public string FileOpProgressFmt => _loc.GetString("FileOpProgressFmt");
+
+        public string NewFileDefault => _loc.GetString("NewFileDefault");
+        public string NewFolderDefault => _loc.GetString("NewFolderDefault");
+        public string NewTextDocumentDefault => _loc.GetString("NewTextDocumentDefault");
+        public string NewShortcutDefault => _loc.GetString("NewShortcutDefault");
+        public string NewExcelDefault => _loc.GetString("NewExcelDefault");
+        public string NewWordDefault => _loc.GetString("NewWordDefault");
+        public string NewPPTDefault => _loc.GetString("NewPPTDefault");
+
+        public string AppName => _loc.GetString("AppName");
+        public string AppVersion => _loc.GetString("AppVersion");
+
+        public string LanguageChinese => _loc.GetString("LanguageChinese");
+        public string LanguageEnglish => _loc.GetString("LanguageEnglish");
+        public string LanguageFumo => _loc.GetString("LanguageFumo");
+
+        public string TimeGroupToday => _loc.GetString("TimeGroup.Today");
+        public string TimeGroupYesterday => _loc.GetString("TimeGroup.Yesterday");
+        public string TimeGroupEarlierThisWeek => _loc.GetString("TimeGroup.EarlierThisWeek");
+        public string TimeGroupLastWeek => _loc.GetString("TimeGroup.LastWeek");
+        public string TimeGroupEarlierThisMonth => _loc.GetString("TimeGroup.EarlierThisMonth");
+        public string TimeGroupLastMonth => _loc.GetString("TimeGroup.LastMonth");
+        public string TimeGroupEarlierThisYear => _loc.GetString("TimeGroup.EarlierThisYear");
+        public string TimeGroupLastYear => _loc.GetString("TimeGroup.LastYear");
+        public string TimeGroupLongAgo => _loc.GetString("TimeGroup.LongAgo");
 
         public void RefreshAll()
         {

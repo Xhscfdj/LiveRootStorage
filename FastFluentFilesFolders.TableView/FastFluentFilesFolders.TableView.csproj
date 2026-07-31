@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <GenerateLibraryLayout>true</GenerateLibraryLayout>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

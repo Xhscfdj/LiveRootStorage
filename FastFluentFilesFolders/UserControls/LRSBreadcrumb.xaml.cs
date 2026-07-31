@@ -21,6 +21,7 @@ using Windows.System;
 using FastFluentFilesFolders.ViewModels;
 using FastFluentFilesFolders.Extensions;
 using FastFluentFilesFolders.Extensions.Interfaces;
+using FastFluentFilesFolders.Services;
 
 namespace FastFluentFilesFolders.UserControls
 {
@@ -136,11 +137,36 @@ namespace FastFluentFilesFolders.UserControls
             this.InitializeComponent();
             CopyPathCommand = new RelayCommand(ExecuteCopyPath);
 
+            ToolTipService.SetToolTip(BackButton, App.ML.TooltipBack);
+            ToolTipService.SetToolTip(ForwardButton, App.ML.TooltipForward);
+            ToolTipService.SetToolTip(UpButton, App.ML.TooltipUp);
+            ToolTipService.SetToolTip(RefreshButton, App.ML.TooltipRefresh);
+            ToolTipService.SetToolTip(HomeButton, App.ML.TooltipHome);
+            ToolTipService.SetToolTip(SearchButton, App.ML.TooltipSearch);
+            ToolTipService.SetToolTip(CopyPathButton, App.ML.TooltipCopyPath);
+
             this.Loaded += (s, e) =>
             {
                 _compositor = ElementCompositionPreview.GetElementVisual(this).Compositor;
                 PopulatePluginToolbar();
             };
+
+            App.LocalizationService.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(LocalizationService.CurrentLanguage))
+                    RefreshTooltips();
+            };
+        }
+
+        private void RefreshTooltips()
+        {
+            ToolTipService.SetToolTip(BackButton, App.ML.TooltipBack);
+            ToolTipService.SetToolTip(ForwardButton, App.ML.TooltipForward);
+            ToolTipService.SetToolTip(UpButton, App.ML.TooltipUp);
+            ToolTipService.SetToolTip(RefreshButton, App.ML.TooltipRefresh);
+            ToolTipService.SetToolTip(HomeButton, App.ML.TooltipHome);
+            ToolTipService.SetToolTip(SearchButton, App.ML.TooltipSearch);
+            ToolTipService.SetToolTip(CopyPathButton, App.ML.TooltipCopyPath);
         }
 
         private void PopulatePluginToolbar()
@@ -187,7 +213,7 @@ namespace FastFluentFilesFolders.UserControls
 
         private void BuildSearchFlyout()
         {
-            _searchTextBox = new TextBox { PlaceholderText = "搜索当前目录...", Margin = new Thickness(8) };
+            _searchTextBox = new TextBox { PlaceholderText = App.ML.SearchPlaceholder, Margin = new Thickness(8) };
             _searchTextBox.TextChanged += OnSearchTextChanged;
             _searchTextBox.KeyDown += OnSearchTextBoxKeyDown;
 
@@ -225,7 +251,7 @@ namespace FastFluentFilesFolders.UserControls
 
             _searchStatusText = new TextBlock
             {
-                Text = "输入关键词开始搜索", Margin = new Thickness(12), FontSize = 12,
+                Text = App.ML.SearchStartHint, Margin = new Thickness(12), FontSize = 12,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
             };
             _searchStatusText.Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
@@ -453,7 +479,7 @@ namespace FastFluentFilesFolders.UserControls
             if (btn?.Tag is not BreadcrumbSegment segment) return;
 
             flyout.Items.Clear();
-            flyout.Items.Add(new MenuFlyoutItem { Text = "加载中...", IsEnabled = false });
+            flyout.Items.Add(new MenuFlyoutItem { Text = App.ML.SearchLoading, IsEnabled = false });
 
             await PopulateSubFolderFlyout(flyout, segment.FullPath);
         }
@@ -482,7 +508,7 @@ namespace FastFluentFilesFolders.UserControls
                     {
                         flyout.Items.Add(new MenuFlyoutItem
                         {
-                            Text = "（空文件夹）",
+                            Text = App.ML.FlyoutEmptyFolder,
                             IsEnabled = false
                         });
                     }
@@ -496,7 +522,7 @@ namespace FastFluentFilesFolders.UserControls
                     flyout.Items.Clear();
                     flyout.Items.Add(new MenuFlyoutItem
                     {
-                        Text = "（无法访问）",
+                        Text = App.ML.FlyoutInaccessible,
                         IsEnabled = false
                     });
                 });
@@ -574,13 +600,13 @@ namespace FastFluentFilesFolders.UserControls
             if (query.Length == 0)
             {
                 _searchResults.Clear();
-                _searchStatusText.Text = "输入关键词开始搜索";
+                _searchStatusText.Text = App.ML.SearchStartHint;
                 _searchStatusText.Visibility = Visibility.Visible;
                 _searchResultsList.Visibility = Visibility.Collapsed;
                 return;
             }
 
-            _searchStatusText.Text = "搜索中...";
+            _searchStatusText.Text = App.ML.SearchInProgress;
             _searchStatusText.Visibility = Visibility.Visible;
             _searchResultsList.Visibility = Visibility.Collapsed;
 
@@ -631,7 +657,7 @@ namespace FastFluentFilesFolders.UserControls
 
                     if (_searchResults.Count == 0)
                     {
-                        _searchStatusText.Text = "未找到结果";
+                        _searchStatusText.Text = App.ML.SearchNoResults;
                         _searchStatusText.Visibility = Visibility.Visible;
                         _searchResultsList.Visibility = Visibility.Collapsed;
                     }

@@ -16,6 +16,7 @@ namespace FastFluentFilesFolders.Views
         public PluginsPage()
         {
             InitializeComponent();
+            DataContext = App.ML;
             RefreshInstalledPlugins();
             LoadPluginSettings();
         }
@@ -92,18 +93,18 @@ namespace FastFluentFilesFolders.Views
                 if (success)
                 {
                     RefreshAll();
-                    await ShowDialogAsync("导入成功",
+                    await ShowDialogAsync(App.ML.Get("PluginImport.ImportSuccessTitle"),
                         $"{package?.Name ?? ""} v{package?.Version ?? ""}");
                 }
                 else
                 {
-                    await ShowDialogAsync("导入失败", App.ML.Get(message));
+                    await ShowDialogAsync(App.ML.Get("PluginImport.ImportFailedTitle"), App.ML.Get(message));
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[PluginsPage] Import error: {ex.Message}");
-                await ShowDialogAsync("导入失败", ex.Message);
+                await ShowDialogAsync(App.ML.Get("PluginImport.ImportFailedTitle"), ex.Message);
             }
             finally
             {
@@ -124,10 +125,10 @@ namespace FastFluentFilesFolders.Views
 
             var dialog = new ContentDialog
             {
-                Title = "确认卸载",
-                Content = $"确定要卸载 \"{displayText}\" 吗？",
-                PrimaryButtonText = "卸载",
-                CloseButtonText = "取消",
+                Title = App.ML.Get("PluginImport.UninstallConfirmTitle"),
+                Content = string.Format(App.ML.Get("PluginImport.UninstallConfirmFmt"), displayText),
+                PrimaryButtonText = App.ML.Get("PluginImport.UninstallBtn"),
+                CloseButtonText = App.ML.Get("PluginImport.CancelBtn"),
                 XamlRoot = App.MainWindow!.Content.XamlRoot,
                 DefaultButton = ContentDialogButton.Close
             };
@@ -145,7 +146,7 @@ namespace FastFluentFilesFolders.Views
             {
                 Title = title,
                 Content = message,
-                CloseButtonText = "OK",
+                CloseButtonText = App.ML.CmdOk,
                 XamlRoot = App.MainWindow!.Content.XamlRoot,
                 DefaultButton = ContentDialogButton.Close
             };

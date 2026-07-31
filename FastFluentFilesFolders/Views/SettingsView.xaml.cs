@@ -18,13 +18,17 @@ namespace FastFluentFilesFolders.Views
     public sealed partial class SettingsView : Page
     {
         private int _fumoKeyIndex;
+        private SettingsViewModel? _settingsVm;
 
         public SettingsView()
         {
-            DataContext = new SettingsViewModel(App.ML);
+            _settingsVm = new SettingsViewModel(App.ML);
+            DataContext = _settingsVm;
             InitializeComponent();
             LoadPluginSettings();
             RefreshInstalledPluginsList();
+
+            AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSettingsViewKeyDown), true);
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -36,6 +40,14 @@ namespace FastFluentFilesFolders.Views
             if (DataContext is SettingsViewModel vm &&
                 App.LocalizationService.CurrentLanguage == "fumo")
                 vm.UnlockFumoLanguage();
+        }
+
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            base.OnNavigatedFrom(e);
+            AutoSaveSettings();
+            // NavigationCacheMode=Disabled：页面销毁前必须退订，否则 VM 被单例 AppConfigs 泄漏
+            _settingsVm?.Unsubscribe();
         }
 
         private void OnSettingsViewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -186,16 +198,16 @@ namespace FastFluentFilesFolders.Views
             {
                 Title = title,
                 Content = message,
-                CloseButtonText = "OK",
+                CloseButtonText = App.ML.CmdOk,
                 XamlRoot = App.MainWindow!.Content.XamlRoot,
                 DefaultButton = ContentDialogButton.Close
             };
             await dialog.ShowAsync();
         }
 
-        private void SaveSettings(object sender, RoutedEventArgs e)
+        private void AutoSaveSettings()
         {
-            App.SharedViewModel.AppConfigs.SaveConfig();
+            App.SharedViewModel?.AppConfigs?.SaveConfig();
         }
     }
 }

@@ -17,11 +17,8 @@ namespace FastFluentFilesFolders.Services
 {
 	public class ShellIconHelper : IIconProvider
 	{
-		// 图标缓存：键格式见 BuildCacheKey
-		private static readonly ConcurrentDictionary<string, ImageSource> _iconCache = new();
-
-		// 正在加载中的图标（按缓存键去重，避免相同图标并发重复解码）
-		private static readonly ConcurrentDictionary<string, Task<ImageSource?>> _inflight = new();
+		private readonly IconCache _iconCache;
+		private readonly ConcurrentDictionary<string, Task<ImageSource?>> _inflight = new();
 
 		// 定义需要特殊处理（图标不固定）的扩展名
 		private static readonly HashSet<string> SpecialExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -59,19 +56,23 @@ namespace FastFluentFilesFolders.Services
 		[DllImport("user32.dll", SetLastError = true)]
 		private static extern bool DestroyIcon(IntPtr hIcon);
 
+		public ShellIconHelper(IconCache iconCache)
+		{
+			_iconCache = iconCache;
+		}
+
 		/// <summary>
 		/// 获取文件/文件夹的系统图标（异步，支持缓存）
 		/// </summary>
-		public async Task<ImageSource?> GetIconAsync(string fullPath, bool isFolder, DispatcherQueue dispatcherQueue, uint size = 32)
+		public async Task<ImageSource?> GetIconAsync(string fullPath, bool isFolder, DispatcherQueue dispatcherQueue, uint size = 24)
 		{
 			if (string.IsNullOrEmpty(fullPath))
 				return null;
-			size = 16;
-			bool useLargeIcon = size >= 32;
+			bool useLargeIcon = size >= 20;
 			string cacheKey = BuildCacheKey(fullPath, isFolder, useLargeIcon);
 
 			// 1. 尝试从缓存获取
-			if (_iconCache.TryGetValue(cacheKey, out var cachedIcon))
+			if (_iconCache.TryGet(cacheKey, out var cachedIcon))
 				return cachedIcon;
 
 			// 2. 同一 key 只发起一次实际加载，其余共享同一个 Task，
@@ -92,21 +93,20 @@ namespace FastFluentFilesFolders.Services
 		{
 			var icon = await LoadIconCoreAsync(fullPath, isFolder, useLargeIcon, dispatcherQueue);
 			if (icon != null)
-				_iconCache.TryAdd(cacheKey, icon);
+				_iconCache.Set(cacheKey, icon);
 			return icon;
 		}
 
 		/// <summary>
 		/// 同步尝试从缓存获取图标（不触发任何文件系统访问），用于命中缓存时的快速路径
 		/// </summary>
-		public static bool TryGetCached(string fullPath, bool isFolder, out ImageSource? icon)
+		public bool TryGetCached(string fullPath, bool isFolder, out ImageSource? icon)
 		{
 			icon = null;
 			if (string.IsNullOrEmpty(fullPath))
 				return false;
-			// 与 GetIconAsync 一致：强制使用 16px 小图标
 			string cacheKey = BuildCacheKey(fullPath, isFolder, false);
-			return _iconCache.TryGetValue(cacheKey, out icon);
+			return _iconCache.TryGet(cacheKey, out icon);
 		}
 
 		/// <summary>
@@ -273,7 +273,7 @@ namespace FastFluentFilesFolders.Services
 		/// <summary>
 		/// 清除图标缓存（例如在系统主题更改时调用）
 		/// </summary>
-		public static void ClearCache()
+		public void ClearCache()
 		{
 			_iconCache.Clear();
 		}

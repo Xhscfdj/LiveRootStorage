@@ -10,10 +10,6 @@
     xmlns:ctrls="using:Microsoft.UI.Xaml.Controls"
 	xmlns:CTKTCtrls="using:CommunityToolkit.WinUI.Controls" 
     mc:Ignorable="d">
-    
-    <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop>
 
     <Grid x:Name="RootGrid">
         <ctrls:NavigationView x:Name="MainNav" PaneDisplayMode="LeftCompact"
@@ -23,14 +19,14 @@
             <ctrls:NavigationView.PaneHeader>
                 <StackPanel Orientation="Horizontal" Spacing="4">
                     <FontIcon Glyph="&#xE838;" FontSize="16" />
-                    <TextBlock Text="FastFluentFilesFolders" FontSize="14" FontWeight="SemiBold"
+                    <TextBlock Text="{Binding ML.AppName}" FontSize="14" FontWeight="SemiBold"
                                VerticalAlignment="Center" Margin="4,0,0,0"/>
                 </StackPanel>
             </ctrls:NavigationView.PaneHeader>
 
             <ctrls:NavigationView.MenuItems>
-                <ctrls:NavigationViewItem Icon="Folder" Content="文件浏览" Tag="explorer"/>
-                <ctrls:NavigationViewItem Icon="AllApps" Content="插件" Tag="plugins"/>
+                <ctrls:NavigationViewItem Icon="Folder" Content="{Binding ML.NavExplorer}" Tag="explorer"/>
+                <ctrls:NavigationViewItem Icon="AllApps" Content="{Binding ML.NavPlugins}" Tag="plugins"/>
             </ctrls:NavigationView.MenuItems>
 
             <Grid>
@@ -40,7 +36,7 @@
                 </Grid.RowDefinitions>
 
                 <TitleBar x:Name="AppTitleBar"
-                      Title="FastFluentFilesFolders" Subtitle="v1.0.1">
+                      Title="{Binding ML.AppName}" Subtitle="v1.0.1">
                     <TitleBar.IconSource>
                         <FontIconSource Glyph="&#xE838;"/>
                     </TitleBar.IconSource>
@@ -65,7 +61,7 @@
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16">
                 <ProgressRing IsActive="True" Width="48" Height="48"
                               Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
-                <TextBlock Text="FastFluentFilesFolders" FontSize="18" FontWeight="SemiBold"
+                <TextBlock Text="{Binding ML.AppName}" FontSize="18" FontWeight="SemiBold"
                            HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
             </StackPanel>
             <Border.Resources>

@@ -11,22 +11,21 @@
 
     <ScrollViewer>
         <StackPanel Padding="24" Spacing="14" HorizontalAlignment="Stretch">
-            <TextBlock Text="插件管理" FontSize="22" FontWeight="Bold" />
-            <TextBlock Text="Plugin Management" FontSize="14" Foreground="Gray" />
+            <TextBlock Text="{Binding PluginsPageTitle}" FontSize="22" FontWeight="Bold" />
 
             <!-- Import -->
-            <comCtrls:SettingsCard Header="导入插件" x:Name="ImportCard">
+            <comCtrls:SettingsCard Header="{Binding PluginImport}" x:Name="ImportCard">
                 <comCtrls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8A7;" />
                 </comCtrls:SettingsCard.HeaderIcon>
                 <Button x:Name="ImportBtn" Click="OnImportClick"
                         Style="{StaticResource AccentButtonStyle}"
-                        Content="选择 .zip 导入" />
+                        Content="{Binding PluginImportBtn}" />
             </comCtrls:SettingsCard>
 
             <!-- Installed plugins list -->
             <StackPanel x:Name="InstalledSection" Visibility="Collapsed">
-                <TextBlock Text="已安装的插件" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0"/>
+                <TextBlock Text="{Binding PluginInstalled}" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0"/>
                 <ListView x:Name="InstalledList" Height="200" SelectionMode="None">
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="x:String">
@@ -51,7 +50,7 @@
 
             <!-- Plugin settings -->
             <StackPanel x:Name="PluginSettingsSection" Visibility="Collapsed">
-                <TextBlock Text="插件设置" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0"/>
+                <TextBlock Text="{Binding PluginsSettingsHeader}" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0"/>
                 <StackPanel x:Name="PluginSettingsStack" Spacing="14" />
             </StackPanel>
         </StackPanel>

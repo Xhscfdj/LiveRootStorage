@@ -183,6 +183,12 @@ namespace FastFluentFilesFolders.Helpers
             });
         }
 
+        public void RefreshHeaderNames()
+        {
+            foreach (var (key, header) in _groupHeaders)
+                header.Name = GetLocalizedGroupName(key);
+        }
+
         private void RebuildFlat()
         {
             Clear();
@@ -214,6 +220,7 @@ namespace FastFluentFilesFolders.Helpers
                 return (FileGroupHeader)existing;
 
             var header = new FileGroupHeader(key);
+            header.Name = GetLocalizedGroupName(key);
             if (children.Count > 0)
             {
                 header.LastModifiedTime = children.Max(c => c.LastModifiedTime);
@@ -276,26 +283,40 @@ namespace FastFluentFilesFolders.Helpers
             var local = dateTime.Kind == DateTimeKind.Utc ? dateTime.ToLocalTime() : dateTime;
             var today = now.Date;
 
-            if (local.Date == today) return "今天";
-            if (local.Date == today.AddDays(-1)) return "昨天";
+            if (local.Date == today) return "group_today";
+            if (local.Date == today.AddDays(-1)) return "group_yesterday";
             var diffDays = (today - local.Date).Days;
-            if (diffDays < 7 && local.DayOfWeek < today.DayOfWeek) return "本周早些时候";
-            if (diffDays < 14) return "上周";
-            if (local.Year == now.Year && local.Month == now.Month) return "本月早些时候";
-            if (new DateTime(now.Year, now.Month, 1).AddMonths(-1) == new DateTime(local.Year, local.Month, 1)) return "上个月";
-            if (local.Year == now.Year) return "今年早些时候";
-            if (local.Year == now.Year - 1) return "去年";
-            return "很久以前";
+            if (diffDays < 7 && local.DayOfWeek < today.DayOfWeek) return "group_earlier_this_week";
+            if (diffDays < 14) return "group_last_week";
+            if (local.Year == now.Year && local.Month == now.Month) return "group_earlier_this_month";
+            if (new DateTime(now.Year, now.Month, 1).AddMonths(-1) == new DateTime(local.Year, local.Month, 1)) return "group_last_month";
+            if (local.Year == now.Year) return "group_earlier_this_year";
+            if (local.Year == now.Year - 1) return "group_last_year";
+            return "group_long_ago";
         }
+
+        public static string GetLocalizedGroupName(string key) => key switch
+        {
+            "group_today" => App.ML.TimeGroupToday,
+            "group_yesterday" => App.ML.TimeGroupYesterday,
+            "group_earlier_this_week" => App.ML.TimeGroupEarlierThisWeek,
+            "group_last_week" => App.ML.TimeGroupLastWeek,
+            "group_earlier_this_month" => App.ML.TimeGroupEarlierThisMonth,
+            "group_last_month" => App.ML.TimeGroupLastMonth,
+            "group_earlier_this_year" => App.ML.TimeGroupEarlierThisYear,
+            "group_last_year" => App.ML.TimeGroupLastYear,
+            "group_long_ago" => App.ML.TimeGroupLongAgo,
+            _ => key
+        };
     }
 
     public static class TimeGroupSortConverter
     {
         public static int GetSortOrder(string groupName) => groupName switch
         {
-            "今天" => 0, "昨天" => 1, "本周早些时候" => 2, "上周" => 3,
-            "本月早些时候" => 4, "上个月" => 5, "今年早些时候" => 6,
-            "去年" => 7, "很久以前" => 8, _ => 9
+            "group_today" => 0, "group_yesterday" => 1, "group_earlier_this_week" => 2, "group_last_week" => 3,
+            "group_earlier_this_month" => 4, "group_last_month" => 5, "group_earlier_this_year" => 6,
+            "group_last_year" => 7, "group_long_ago" => 8, _ => 9
         };
     }
 }

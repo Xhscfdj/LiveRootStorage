@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -27,6 +27,7 @@ namespace FastFluentFilesFolders.ViewModels
         [ObservableProperty] private string _homePageFullPath = DefaultDownloadsPath;
         [ObservableProperty] private string _defaultOrderMode = "ModifiedDesc";
         [ObservableProperty] private string _language = "zh-Hans";
+        [ObservableProperty] private string _systemBackdropMode = "Mica";
         [ObservableProperty] private System.Collections.ObjectModel.ObservableCollection<string> _timeGroupedFolders = new();
         private static readonly string DefaultDownloadsPath =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
@@ -64,6 +65,7 @@ namespace FastFluentFilesFolders.ViewModels
             IconParallelLoadingCount = configuration.GetValue("Performance:IconParallelLoadingCount", 30);
             DefaultOrderMode = configuration.GetValue("General:DefaultOrderMode", "ModifiedDesc")!;
             Language = configuration.GetValue("General:Language", "zh-Hans")!;
+            SystemBackdropMode = configuration.GetValue("Appearance:SystemBackdropMode", "Mica")!;
             if (IconParallelLoadingCount != 0) IfLimitIconLoadingConcurrency = true;
             var folderArray = configuration.GetSection("Special:TimeGroupedFolders").Get<string[]>();
             TimeGroupedFolders = new System.Collections.ObjectModel.ObservableCollection<string>(
@@ -76,7 +78,8 @@ namespace FastFluentFilesFolders.ViewModels
             var json = string.Concat(
                 "{\n",
                 "  \"Appearance\": {\n",
-               $"    \"MiddleFilesHeight\": {MiddleFilesHeight}\n",
+                $"    \"MiddleFilesHeight\": {MiddleFilesHeight},\n",
+                $"    \"SystemBackdropMode\": \"{SystemBackdropMode}\"\n",
                 "  },\n",
                 "  \"Advanced\": {\n",
                $"    \"ifUsesWin32APIToGetIcon\": {IfUsesWin32APIToGetIcon.ToString().ToLower()}\n",

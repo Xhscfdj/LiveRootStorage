@@ -409,22 +409,23 @@ namespace FastFluentFilesFolders.ViewModels
 				row++;
 			}
 
-			var typeDesc = item.IsDirectory ? "文件夹"
-				: item.Extension.Length > 0 ? $"{item.Extension.TrimStart('.')} 文件"
-				: "文件";
-			AddRow("类型:", typeDesc);
-			AddRow("路径:", item.FullPath);
-			AddRow("大小:", item.IsDirectory ? item.VisualSize : $"{item.VisualSize} ({item.ExactSize:N0} 字节)");
-			AddRow("修改日期:", item.LastModifiedTimeString);
-			AddRow("创建日期:", item.FirstCreatedTimeString);
+			var typeDesc = item.IsDirectory ? App.ML.PropertiesFolder
+				: item.Extension.Length > 0 ? $"{item.Extension.TrimStart('.')} {App.ML.PropertiesFile}"
+				: App.ML.PropertiesFile;
+			AddRow(App.ML.PropertiesType, typeDesc);
+			AddRow(App.ML.PropertiesPath, item.FullPath);
+			var sizeText = item.IsDirectory ? item.VisualSize : $"{item.VisualSize} ({string.Format(App.ML.PropertiesBytesFmt, item.ExactSize.ToString("N0"))})";
+			AddRow(App.ML.PropertiesSize, sizeText);
+			AddRow(App.ML.PropertiesModified, item.LastModifiedTimeString);
+			AddRow(App.ML.PropertiesCreated, item.FirstCreatedTimeString);
 
 			panel.Children.Add(propsGrid);
 
 			var dialog = new ContentDialog
 			{
-				Title = "属性",
+				Title = App.ML.PropertiesTitle,
 				Content = panel,
-				CloseButtonText = "关闭(C)",
+				CloseButtonText = App.ML.PropertiesClose,
 				DefaultButton = ContentDialogButton.Close,
 				XamlRoot = App.MainWindow.Content.XamlRoot
 			};
@@ -450,7 +451,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewFolder()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			await AddNewItemToViewAsync(destDir, "新建文件夹", isDirectory: true);
+			await AddNewItemToViewAsync(destDir, App.ML.NewFolderDefault, isDirectory: true);
 			BreadcrumbRefreshRequested?.Invoke();
 		}
 
@@ -458,7 +459,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewTextDocument()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			await AddNewItemToViewAsync(destDir, "新建文本文档.txt", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, App.ML.NewTextDocumentDefault, isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
 		}
 
@@ -466,7 +467,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewShortcut()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			await AddNewItemToViewAsync(destDir, "新建快捷方式.lnk", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, App.ML.NewShortcutDefault, isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
 		}
 
@@ -474,7 +475,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewFile()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			await AddNewItemToViewAsync(destDir, "新建文件", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, App.ML.NewFileDefault, isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
 		}
 
@@ -482,7 +483,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewExcelSpreadsheet()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			await AddNewItemToViewAsync(destDir, "新建Excel表格.xlsx", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, App.ML.NewExcelDefault, isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
 		}
 
@@ -490,7 +491,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewWordDocument()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			await AddNewItemToViewAsync(destDir, "新建Word文档.docx", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, App.ML.NewWordDefault, isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
 		}
 
@@ -498,7 +499,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private async Task NewPowerPointPresentation()
 		{
 			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-			await AddNewItemToViewAsync(destDir, "新建PPT演示.pptx", isDirectory: false);
+			await AddNewItemToViewAsync(destDir, App.ML.NewPPTDefault, isDirectory: false);
 			BreadcrumbRefreshRequested?.Invoke();
 		}
 
@@ -570,6 +571,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private readonly Stack<string> _backStack = new();
 		private readonly Stack<string> _forwardStack = new();
 		private bool _isNavigatingFromHistory;
+		private FileSystemNodeViewModel? _folderToRelease;
 		private ObservableCollection<FileSystemNodeViewModel> _rootDirectories = new();
 		public ObservableCollection<FileSystemNodeViewModel> RootDirectories
 		{
@@ -583,6 +585,11 @@ namespace FastFluentFilesFolders.ViewModels
 
 		partial void OnSelectedFolderChanged(FileSystemNodeViewModel? value)
 		{
+			if (_folderToRelease != null && _folderToRelease != value)
+			{
+				_folderToRelease.Children.Clear();
+				_folderToRelease = null;
+			}
 			Debug.WriteLine($"\n----Selected:{value?.Name}\n");
 			Debug.WriteLine($"OnSelectedFolderChanged called with value: {value?.FullPath ?? "null"}");
 			Debug.WriteLine($"Is UI thread? {_uiDispatcherQueue.HasThreadAccess}");
@@ -640,6 +647,8 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			if (item.IsDirectory)
 			{
+				if (SelectedFolder?.IsStandalone == true)
+					_folderToRelease = SelectedFolder;
 				SelectedFolder = item;
 
 			}
@@ -797,7 +806,10 @@ namespace FastFluentFilesFolders.ViewModels
 				OpenWithDefaultProgram(archiveFile);
 				return;
 			}
+			if (SelectedFolder?.IsStandalone == true)
+				_folderToRelease = SelectedFolder;
 			var node = FileSystemNodeViewModel.CreateArchiveDirectory(archiveFile, relative, AppConfigs!, _uiDispatcherQueue);
+			node.IsStandalone = true;
 			_previousPath = null;
 			SelectedFolder = node;
 		}
@@ -805,7 +817,10 @@ namespace FastFluentFilesFolders.ViewModels
 		private void NavigateToNewPath(string path)
 		{
 			if (!Directory.Exists(path)) return;
+			if (SelectedFolder?.IsStandalone == true)
+				_folderToRelease = SelectedFolder;
 			var node = new FileSystemNodeViewModel(path, true, false, _appConfigs, _uiDispatcherQueue, false);
+			node.IsStandalone = true;
 			_previousPath = null;
 			SelectedFolder = node;
 		}

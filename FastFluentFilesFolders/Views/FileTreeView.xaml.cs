@@ -20,8 +20,6 @@ namespace FastFluentFilesFolders.Views
             try
             {
                 InitializeComponent();
-                var uiDispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-                IIconProvider iconProvider = new WindowsIconProvider();
                 this.DataContext = VM;
             }
             catch (Exception ex)

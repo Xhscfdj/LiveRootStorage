@@ -22,12 +22,7 @@
                                     <TextBlock Text="{Binding Text}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                     <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4" Margin="0,4,0,0"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="共"/>
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="{Binding FileCount}"/>
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="个项目，进度"/>
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="{Binding Process}"/>
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="，大小"/>
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="{Binding SizeText}"/>
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="{Binding ProgressDisplay}"/>
                                     </StackPanel>
                                 </StackPanel>
                             </DataTemplate>

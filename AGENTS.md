@@ -80,3 +80,6 @@ Always keep the performance best.
 
 ## No tests, lint, or CI
 This repo has **no test projects**, no linter/formatter config, no CI pipelines. There is nothing to verify beyond `dotnet build`.
+
+## Other things
+默认使用中文对话。

@@ -32,19 +32,20 @@ namespace FastFluentFilesFolders.Services
             if (string.IsNullOrEmpty(language) || CurrentLanguage == language)
                 return;
 
+            LoadStrings(language);
             CurrentLanguage = language;
-            LoadStrings();
         }
 
-        private void LoadStrings()
+        private void LoadStrings(string? language = null)
         {
-            if (CurrentLanguage == "fumo")
+            var lang = language ?? CurrentLanguage;
+            if (lang == "fumo")
             {
                 _strings = new Dictionary<string, string>();
                 return;
             }
 
-            var fileName = CurrentLanguage == "en" ? "en.json" : "zh-Hans.json";
+            var fileName = lang == "en" ? "en.json" : "zh-Hans.json";
             var filePath = Path.Combine(StringsDir, fileName);
 
             if (!File.Exists(filePath))
