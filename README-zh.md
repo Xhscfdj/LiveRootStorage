@@ -8,6 +8,9 @@
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://www.microsoft.com/windows)
 
+## 哦对了
+这个项目小于等于v1.0.1(包括1.0.1)版本没有自动更新功能，请访问该项目地址以获取最新更新DA⭐ZE
+
 ## 咱想要starrrrrrrrr
 球球了!
 喜欢的话,就给个starrr☆rrrats吧喵~
@@ -30,11 +33,10 @@
 - **行内重命名** -- 点击文件或文件夹名称即可行内重命名（Enter 确认，Escape 取消）
 - **右键菜单** -- 右键菜单支持文件操作（剪切、复制、粘贴、重命名、删除）和新建项目（新建文件夹、新建文本文档）
 - **文件操作** -- 通过 Windows 剪贴板实现完整的剪切/复制/粘贴功能
-- **主题感知图标** -- 多层图标渲染，可自适应 Windows 浅色/深色主题
 - **可配置** -- 设置面板支持首页路径、默认排序方式、行高和图标提供程序选项
 - **Mica 材质** -- 原生 Windows 11 云母材质和标题栏一体化设计
 - **按时间分组** -- 文件按时间段分组（今天、昨天、本周等）
-- **插件系统** -- 用插件扩展该程序的功能吧喵！默认带有压缩/解压缩/预览压缩包插件！开发详细文档见：[文档](https://www.github.com/Xhscfdj/FastFluentFilesFolders/FastFluentFilesFolders/Extensions/PLUGIN_DEV_GUIDE.md)
+- **插件系统** -- 用插件扩展该程序的功能吧喵！默认带有压缩/解压缩/预览压缩包插件！开发详细文档见：[文档](https://github.com/Xhscfdj/FastFluentFilesFolders/blob/master/FastFluentFilesFolders/Extensions/PLUGIN_DEV_GUIDE.md)
 - **还会有更多喵!**
 ### 性能
 - **快,流畅!** -- 加载成百上千的巨大目录时,看起来完全不卡! 这是因为使用了异步加载,这非常有效喵
@@ -42,7 +44,7 @@
 ## 环境要求
 
 - Windows 10 版本 19041 (20H1) 或更高 / Windows 11
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ## 构建与运行
 

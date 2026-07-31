@@ -7,9 +7,13 @@ A modern file explorer for Windows, built with WinUI 3 and the Windows App SDK.
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://www.microsoft.com/windows)
+
+## Something...
+This project won't auto-update (v1.0.1 and below).  
+If you want to see new versions, please visit this repo, thank you!
+
 ## I want a starrrrrrrrrrr
-If you like it, please give me a starrrrr, thank youuuuuuuuuu!!! meow~
-starrr⭐rrratsDA☆ZE
+If you like it, please give me a starrrrr⭐, thank youuuuuuuuuu DA⭐ZE!!! 
 
 ## Install TIP (Very IMPORTANT!!)
 Because this software is self-signed, so your computer may not trust this installer.  
@@ -30,7 +34,7 @@ Then, you can run this powershell command:
 - **Configurable** -- settings panel for home path, default sort order, row height, and icon provider options
 - **Mica backdrop** -- native Windows 11 materials with title bar integration
 - **Time-based grouping** -- files grouped by time periods (Today, Yesterday, This Week, etc.)
-- **Plugins...** -- Expand the program's functionality with extensions (Plugin dev docs: [docs](https://www.github.com/Xhscfdj/FastFluentFilesFolders/FastFluentFilesFolders/Extensions/PLUGIN_DEV_GUIDE.md)
+- **Plugins...** -- Expand the program's functionality with extensions (Plugin dev docs: [docs](https://github.com/Xhscfdj/FastFluentFilesFolders/blob/master/FastFluentFilesFolders/Extensions/PLUGIN_DEV_GUIDE.md)
 - **There will be more functions...**
 ### Performance
 - **Fast and fluent** -- the speed of loading directories which has hundreds even thousands of items is very fast(450 items directory doesn't take any time visually). That's because we load the items' info asynchronously.
@@ -38,7 +42,7 @@ Then, you can run this powershell command:
 ## Requirements
 
 - Windows 10 version 19041 (20H1) or later / Windows 11
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ## Build & Run
 
