@@ -28,6 +28,7 @@ namespace FastFluentFilesFolders.Views
         private CommandBarFlyout? _itemContextFlyout;
         private CommandBarFlyout? _baseContextFlyout;
         private bool _toolbarBuilt;
+        private (ObservableCollection<FileSystemNodeViewModel>? Items, bool Special)? _lastAppliedGroupedSource;
         private readonly List<ICommandBarElement> _itemPluginItems = new();
         private readonly List<ICommandBarElement> _basePluginItems = new();
         private ObservableCollection<FileSystemNodeViewModel>? _watchedCollection;
@@ -99,6 +100,7 @@ namespace FastFluentFilesFolders.Views
                 _dataContextVm.PropertyChanged -= OnViewModelPropertyChanged;
             if (_watchedCollection != null)
                 _watchedCollection.CollectionChanged -= OnCurrentFolderCollectionChanged;
+            _lastAppliedGroupedSource = null;
             this.Unloaded -= OnUnloaded;
         }
 
@@ -114,14 +116,22 @@ namespace FastFluentFilesFolders.Views
 
         private void UpdateGroupedSource(MainWindowViewModel vm)
         {
+            var items = vm.CurrentFolderContent ?? new();
+            var special = vm.IsCurrentFolderSpecial;
+
+            // Deduplicate: skip if same (items reference, special flag) was already applied
+            if (_lastAppliedGroupedSource is ({ } lastItems, var lastSpecial) &&
+                ReferenceEquals(lastItems, items) && lastSpecial == special)
+                return;
+
             if (_watchedCollection != null)
                 _watchedCollection.CollectionChanged -= OnCurrentFolderCollectionChanged;
 
-            var items = vm.CurrentFolderContent ?? new();
             _watchedCollection = items;
             _watchedCollection.CollectionChanged += OnCurrentFolderCollectionChanged;
 
-            FileGrid.UpdateSource(items, vm.IsCurrentFolderSpecial);
+            _lastAppliedGroupedSource = (items, special);
+            FileGrid.UpdateSource(items, special);
             if (FileGrid.ItemsSource is GroupedFileList list)
                 list.SetDispatcher(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
         }

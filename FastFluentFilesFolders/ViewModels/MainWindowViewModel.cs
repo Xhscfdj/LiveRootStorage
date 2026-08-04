@@ -92,7 +92,7 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			Debug.WriteLine("[DebugButton] Pressed.");
 			var folder = RootDirectories.FirstOrDefault(); // 取第一个驱动器
-			_ = UpdateCurrentFolderContentAsync(folder);
+			_ = UpdateCurrentFolderContentAsync(folder, version: null);
 			TestString = "Modified by testFunction.";
 			Debug.WriteLine($"[DebugButton] CurrentFolderContent count is {CurrentFolderContent.Count}");
 			foreach (var item in CurrentFolderContent)
@@ -541,7 +541,7 @@ namespace FastFluentFilesFolders.ViewModels
 			if (SelectedFolder != null)
 			{
 				await SelectedFolder.ReloadChildrenAsync();
-				await UpdateCurrentFolderContentAsync(SelectedFolder);
+				await UpdateCurrentFolderContentAsync(SelectedFolder, version: null);
 				BreadcrumbRefreshRequested?.Invoke();
 			}
 		}
@@ -568,8 +568,10 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 		public SemaphoreSlim IconLoadSemaphore = new(30, 30); // 最多30个并发
 		private readonly SemaphoreSlim _pasteLock = new(1, 1);
-		private readonly Stack<string> _backStack = new();
-		private readonly Stack<string> _forwardStack = new();
+		private readonly List<string> _backStack = new();
+		private readonly List<string> _forwardStack = new();
+		private int _navigationVersion;
+		private const int MaxBackDepth = 100;
 		private bool _isNavigatingFromHistory;
 		private FileSystemNodeViewModel? _folderToRelease;
 		private ObservableCollection<FileSystemNodeViewModel> _rootDirectories = new();
@@ -585,6 +587,7 @@ namespace FastFluentFilesFolders.ViewModels
 
 		partial void OnSelectedFolderChanged(FileSystemNodeViewModel? value)
 		{
+			var version = ++_navigationVersion;
 			if (_folderToRelease != null && _folderToRelease != value)
 			{
 				_folderToRelease.Children.Clear();
@@ -597,13 +600,14 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				if (!_isNavigatingFromHistory && _previousPath != null && _previousPath != value.FullPath)
 				{
-					_backStack.Push(_previousPath);
+					_backStack.Add(_previousPath);
+					if (_backStack.Count > MaxBackDepth) _backStack.RemoveAt(0);
 					_forwardStack.Clear();
 				}
 				_previousPath = value.FullPath;
 				CanGoBack = _backStack.Count > 0;
 				CanGoForward = _forwardStack.Count > 0;
-				_ = UpdateCurrentFolderContentAsync(value);
+				_ = UpdateCurrentFolderContentAsync(value, version);
 			}
 			else
 			{
@@ -612,7 +616,7 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 		private string? _previousPath;
 
-		public async Task UpdateCurrentFolderContentAsync(FileSystemNodeViewModel? folder)
+		public async Task UpdateCurrentFolderContentAsync(FileSystemNodeViewModel? folder, int? version)
 		{
 			if (folder == null)
 			{
@@ -622,25 +626,37 @@ namespace FastFluentFilesFolders.ViewModels
 
 			CancelRename();
 
-			// 确保子项已加载（同步等待，确保 Children 已填充）
-			if (!folder.IsLoaded)
-			{
-				await folder.LoadChildrenAsync();
-			}
+			// 守卫1: 开始异步加载前先检查——过期任务跳过磁盘 I/O
+			if (version.HasValue && version.Value != _navigationVersion) return;
 
-			// 此时 folder.Children 已经在 UI 线程完成填充，可以直接读取
-			// 但为了线程安全，仍然在 UI 线程执行 Clear + Add
-			await _uiDispatcherQueue.EnqueueAsync(() =>
+			try
 			{
-				CurrentFolderContent.Clear();
-				foreach (var item in folder.Children)
+				// 确保子项已加载（同步等待，确保 Children 已填充）
+				if (!folder.IsLoaded)
 				{
-					if (!item.IsPlaceholder)
-						CurrentFolderContent.Add(item);
+					await folder.LoadChildrenAsync();
 				}
-				CurrentBreadcrumbPath = folder.FullPath;
-				OnPropertyChanged(nameof(IsCurrentFolderSpecial));
-			});
+
+				// 此时 folder.Children 已经在 UI 线程完成填充，可以直接读取
+				// 但为了线程安全，仍然在 UI 线程执行 Clear + Add
+				await _uiDispatcherQueue.EnqueueAsync(() =>
+				{
+					// 守卫2: UI 线程回写前再检查——过期写入丢弃
+					if (version.HasValue && version.Value != _navigationVersion) return;
+					CurrentFolderContent.Clear();
+					foreach (var item in folder.Children)
+					{
+						if (!item.IsPlaceholder)
+							CurrentFolderContent.Add(item);
+					}
+					CurrentBreadcrumbPath = folder.FullPath;
+					OnPropertyChanged(nameof(IsCurrentFolderSpecial));
+				});
+			}
+			catch (Exception ex)
+			{
+				Debug.WriteLine($"[UpdateCurrentFolderContent] Error: {ex.Message}");
+			}
 		}
 
 		public void OpenItem(FileSystemNodeViewModel item)
@@ -829,8 +845,9 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			if (_backStack.Count == 0) return;
 			_isNavigatingFromHistory = true;
-			_forwardStack.Push(_previousPath ?? _selectedFolder?.FullPath ?? "");
-			var path = _backStack.Pop();
+			_forwardStack.Add(_previousPath ?? _selectedFolder?.FullPath ?? "");
+			if (_forwardStack.Count > MaxBackDepth) _forwardStack.RemoveAt(0);
+			var path = _backStack[^1]; _backStack.RemoveAt(_backStack.Count - 1);
 			_previousPath = null;
 			NavigateToPath(path);
 			CanGoBack = _backStack.Count > 0;
@@ -842,8 +859,9 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			if (_forwardStack.Count == 0) return;
 			_isNavigatingFromHistory = true;
-			_backStack.Push(_previousPath ?? _selectedFolder?.FullPath ?? "");
-			var path = _forwardStack.Pop();
+			_backStack.Add(_previousPath ?? _selectedFolder?.FullPath ?? "");
+			if (_backStack.Count > MaxBackDepth) _backStack.RemoveAt(0);
+			var path = _forwardStack[^1]; _forwardStack.RemoveAt(_forwardStack.Count - 1);
 			_previousPath = null;
 			NavigateToPath(path);
 			CanGoBack = _backStack.Count > 0;

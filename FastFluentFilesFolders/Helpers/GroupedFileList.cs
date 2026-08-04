@@ -62,6 +62,13 @@ namespace FastFluentFilesFolders.Helpers
 
         public void AddItem(FileSystemNodeViewModel item)
         {
+            // 平铺模式（非分组目录）：直接追加，不建组头
+            if (_groupChildren.Count == 0)
+            {
+                Add(item);
+                return;
+            }
+
             var key = string.IsNullOrEmpty(item.SortByTime)
                 ? GetTimeGroup(item.LastModifiedTime)
                 : item.SortByTime;
@@ -242,6 +249,19 @@ namespace FastFluentFilesFolders.Helpers
 
         public void SortWithinGroups(string sortPath, bool ascending)
         {
+            if (_groupChildren.Count == 0)
+            {
+                // 平铺模式：直接对当前列表排序
+                var all = this.ToList();
+                var sorted = ascending
+                    ? SortByPath(all, sortPath).ToList()
+                    : SortByPathDescending(all, sortPath).ToList();
+                Clear();
+                foreach (var item in sorted)
+                    Add(item);
+                return;
+            }
+
             foreach (var (key, children) in _groupChildren)
             {
                 var sorted = ascending

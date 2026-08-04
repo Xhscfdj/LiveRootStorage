@@ -16,26 +16,21 @@ namespace FastFluentFilesFolders.UserControls
     {
         private GroupedFileList? _groupedSource;
 
+        public LrsTableView()
+        {
+            AllowLiveShaping = false;
+        }
+
         public void UpdateSource(ObservableCollection<FileSystemNodeViewModel> items, bool grouped)
         {
-            if (_groupedSource != null)
-            {
-                _groupedSource.FlatListChanged -= OnFlatListChanged;
-                _groupedSource = null;
-            }
-
-            if (grouped)
+            if (_groupedSource == null)
             {
                 var source = new GroupedFileList();
                 _groupedSource = source;
                 source.FlatListChanged += OnFlatListChanged;
-                source.SetItems(items, grouped);
                 ItemsSource = source;
             }
-            else
-            {
-                ItemsSource = items;
-            }
+            _groupedSource.SetItems(items, grouped);
         }
 
         public void SortBy(string sortPath, bool ascending)

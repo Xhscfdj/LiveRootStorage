@@ -105,7 +105,7 @@ namespace FastFluentFilesFolders.Services
 			icon = null;
 			if (string.IsNullOrEmpty(fullPath))
 				return false;
-			string cacheKey = BuildCacheKey(fullPath, isFolder, false);
+			string cacheKey = BuildCacheKey(fullPath, isFolder, true);
 			return _iconCache.TryGet(cacheKey, out icon);
 		}
 
