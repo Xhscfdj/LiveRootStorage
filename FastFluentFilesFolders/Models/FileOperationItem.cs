@@ -3,6 +3,14 @@ using System.Runtime.CompilerServices;
 
 namespace FastFluentFilesFolders.Models
 {
+    public enum FileOperationState
+    {
+        InProgress,
+        Successful,
+        Error,
+        Canceled
+    }
+
     public class FileOperationItem : INotifyPropertyChanged
     {
         private string _text = "";
@@ -11,6 +19,8 @@ namespace FastFluentFilesFolders.Models
         private string _process = "";
         private string _remainTime = "";
         private string _sizeText = "";
+        private FileOperationState _state = FileOperationState.InProgress;
+        private string _iconGlyph = "";
 
         public string Text { get => _text; set { if (_text != value) { _text = value; Notify(); } } }
         public double Progress { get => _progress; set { if (_progress != value) { _progress = value; Notify(); } } }
@@ -22,6 +32,12 @@ namespace FastFluentFilesFolders.Models
         public string ProgressDisplay => string.Format(
             App.ML?.FileOpProgressFmt ?? "{0} items, progress {1}, size {2}",
             FileCount, Process, SizeText);
+
+        public FileOperationState State { get => _state; set { if (_state != value) { _state = value; Notify(); Notify(nameof(DisplayIconGlyph)); Notify(nameof(IsCompleted)); Notify(nameof(IsInProgress)); } } }
+        public string IconGlyph { get => _iconGlyph; set { if (_iconGlyph != value) { _iconGlyph = value; Notify(); Notify(nameof(DisplayIconGlyph)); } } }
+        public string DisplayIconGlyph => State switch { FileOperationState.Successful => "\uE73E", FileOperationState.Error => "\uE783", FileOperationState.Canceled => "\uE711", _ => IconGlyph };
+        public bool IsCompleted => State != FileOperationState.InProgress;
+        public bool IsInProgress => State == FileOperationState.InProgress;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void Notify([CallerMemberName] string name = "") => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

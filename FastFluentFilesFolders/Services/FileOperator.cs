@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using System.Collections.Specialized;
+using FastFluentFilesFolders.Models;
 
 namespace FastFluentFilesFolders.Services
 {
@@ -36,22 +37,26 @@ namespace FastFluentFilesFolders.Services
 		private const ushort FOF_ALLOWUNDO = 0x0040;
 		private const ushort FOF_NOCONFIRMATION = 0x0010;
 		private const ushort FOF_SILENT = 0x0004;
-		public async Task CopyToAsync(string sourcePath, string destinationPath, bool overwrite = false)
+		public async Task CopyToAsync(string sourcePath, string destinationPath, bool overwrite = false, Action<FileOperationProgress>? progress = null)
 		{
 			if (string.IsNullOrEmpty(sourcePath) || string.IsNullOrEmpty(destinationPath))
 				throw new ArgumentException("路径不能为空");
 
 			await Task.Run(() =>
 			{
+				var state = new FileOperationProgress();
 				if (File.Exists(sourcePath))
 				{
 					// 文件复制
 					File.Copy(sourcePath, destinationPath, overwrite);
+					state.CompletedFiles = 1;
+					state.CompletedBytes = SafeGetFileLength(sourcePath);
+					progress?.Invoke(state);
 				}
 				else if (Directory.Exists(sourcePath))
 				{
 					// 文件夹复制（递归）
-					CopyDirectoryRecursive(sourcePath, destinationPath, overwrite);
+					CopyDirectoryRecursive(sourcePath, destinationPath, overwrite, state, progress);
 				}
 				else
 				{
@@ -60,7 +65,63 @@ namespace FastFluentFilesFolders.Services
 			});
 		}
 
-		private void CopyDirectoryRecursive(string sourceDir, string destDir, bool overwrite)
+		/// <summary>
+		/// 统计一组路径（文件或文件夹，递归）包含的文件总数与总字节数。
+		/// </summary>
+		public async Task<(int FileCount, long TotalBytes)> GetTransferStatsAsync(IEnumerable<string> paths)
+		{
+			if (paths == null) return (0, 0);
+			return await Task.Run(() =>
+			{
+				int count = 0;
+				long bytes = 0;
+				foreach (var path in paths)
+				{
+					if (File.Exists(path))
+					{
+						count++;
+						bytes += SafeGetFileLength(path);
+					}
+					else if (Directory.Exists(path))
+					{
+						EnumerateStats(path, ref count, ref bytes);
+					}
+				}
+				return (count, bytes);
+			});
+		}
+
+		private static void EnumerateStats(string dir, ref int count, ref long bytes)
+		{
+			try
+			{
+				foreach (string file in Directory.EnumerateFiles(dir))
+				{
+					count++;
+					bytes += SafeGetFileLength(file);
+				}
+				foreach (string subDir in Directory.EnumerateDirectories(dir))
+				{
+					EnumerateStats(subDir, ref count, ref bytes);
+				}
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"[GetTransferStats] {dir}: {ex.Message}");
+			}
+		}
+
+		private static long SafeGetFileLength(string path)
+		{
+			try { return new FileInfo(path).Length; }
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"[FileOperator] 获取文件大小失败 {path}: {ex.Message}");
+				return 0;
+			}
+		}
+
+		private void CopyDirectoryRecursive(string sourceDir, string destDir, bool overwrite, FileOperationProgress state, Action<FileOperationProgress>? progress)
 		{
 			Directory.CreateDirectory(destDir);
 
@@ -70,6 +131,9 @@ namespace FastFluentFilesFolders.Services
 				string fileName = Path.GetFileName(file);
 				string destFile = Path.Combine(destDir, fileName);
 				File.Copy(file, destFile, overwrite);
+				state.CompletedFiles++;
+				state.CompletedBytes += SafeGetFileLength(file);
+				progress?.Invoke(state);
 			}
 
 			// 递归复制子目录
@@ -77,7 +141,7 @@ namespace FastFluentFilesFolders.Services
 			{
 				string dirName = Path.GetFileName(subDir);
 				string destSubDir = Path.Combine(destDir, dirName);
-				CopyDirectoryRecursive(subDir, destSubDir, overwrite);
+				CopyDirectoryRecursive(subDir, destSubDir, overwrite, state, progress);
 			}
 		}
 

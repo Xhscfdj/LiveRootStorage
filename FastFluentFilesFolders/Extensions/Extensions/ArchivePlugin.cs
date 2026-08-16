@@ -119,7 +119,8 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             var opItem = new FileOperationItem
             {
                 Text = $"{_ctx.GetString("ArchivePlugin.Compress")} {outputName}",
-                FileCount = 1
+                FileCount = 1,
+                IconGlyph = "\uE7B8"
             };
             FileOperationReporter.ReportOperation(opItem);
 
@@ -164,6 +165,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
                     opItem.Progress = 100;
                     opItem.Process = "100%";
                     opItem.RemainTime = "0";
+                    opItem.State = FileOperationState.Successful;
                 });
 
                 await ShowMessageAsync(
@@ -174,7 +176,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ArchivePlugin] Compress failed: {ex.Message}");
-                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = _ctx.GetString("ArchivePlugin.Failed"); });
+                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = _ctx.GetString("ArchivePlugin.Failed"); opItem.State = FileOperationState.Error; });
                 await ShowMessageAsync(_ctx!.GetString("ArchivePlugin.Failed"), ex.Message);
             }
         }
@@ -184,7 +186,8 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             var opItem = new FileOperationItem
             {
                 Text = $"{_ctx!.GetString("ArchivePlugin.ExtractHere")}: {target.Name}",
-                FileCount = 1
+                FileCount = 1,
+                IconGlyph = "\uE7B8"
             };
             FileOperationReporter.ReportOperation(opItem);
 
@@ -216,6 +219,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
                     opItem.Progress = 100;
                     opItem.Process = "100%";
                     opItem.RemainTime = "0";
+                    opItem.State = FileOperationState.Successful;
                 });
 
                 await ShowMessageAsync(
@@ -225,7 +229,7 @@ namespace FastFluentFilesFolders.Extensions.Extensions
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ArchivePlugin] Extract failed: {ex.Message}");
-                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = _ctx.GetString("ArchivePlugin.Failed"); });
+                _ctx!.UIDispatcherQueue.TryEnqueue(() => { opItem.Progress = 0; opItem.Process = _ctx.GetString("ArchivePlugin.Failed"); opItem.State = FileOperationState.Error; });
                 await ShowMessageAsync(_ctx!.GetString("ArchivePlugin.Failed"), ex.Message);
             }
         }

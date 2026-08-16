@@ -141,7 +141,7 @@
 
 				<!-- Plugins Section -->
 				<StackPanel x:Name="PluginsSection" Visibility="Collapsed">
-					<TextBlock Text="{Binding ML.PluginsSection}" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0"/>
+					<TextBlock Text="{Binding ML.PluginsSection}" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,10"/>
 					<StackPanel x:Name="PluginSettingsStack" Spacing="14" />
 				</StackPanel>
 

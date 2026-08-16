@@ -18,13 +18,13 @@ namespace FastFluentFilesFolders.ViewModels
         public static readonly string UserConfigPath =
             Path.Combine(UserConfigDir, "user_configs.json");
 
-        //public string UserConfigPathToDisplay = "C:C:C:C:C";
         public IConfiguration configuration;
         [ObservableProperty] private int _middleFilesHeight = 40;
         [ObservableProperty] private bool _ifUsesWin32APIToGetIcon = true;
         [ObservableProperty] private bool _ifLimitIconLoadingConcurrency = false;
         [ObservableProperty] private int _iconParallelLoadingCount = 30;
         [ObservableProperty] private string _homePageFullPath = DefaultDownloadsPath;
+        [ObservableProperty] private string _lastVisitedPath = "";
         [ObservableProperty] private string _defaultOrderMode = "ModifiedDesc";
         [ObservableProperty] private string _language = "zh-Hans";
         [ObservableProperty] private string _systemBackdropMode = "Mica";
@@ -62,6 +62,7 @@ namespace FastFluentFilesFolders.ViewModels
             MiddleFilesHeight = configuration.GetValue("Appearance:MiddleFilesHeight", 40);
             IfUsesWin32APIToGetIcon = configuration.GetValue("Advanced:ifUsesWin32APIToGetIcon", true);
             HomePageFullPath = configuration.GetValue("General:HomePageFullPath", DefaultDownloadsPath)!;
+            LastVisitedPath = configuration.GetValue("General:LastVisitedPath", "")!;
             IconParallelLoadingCount = configuration.GetValue("Performance:IconParallelLoadingCount", 30);
             DefaultOrderMode = configuration.GetValue("General:DefaultOrderMode", "ModifiedDesc")!;
             Language = configuration.GetValue("General:Language", "zh-Hans")!;
@@ -75,6 +76,7 @@ namespace FastFluentFilesFolders.ViewModels
         public void SaveConfig()
         {
             var escapedPath = HomePageFullPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            var escapedLastVisited = LastVisitedPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
             var json = string.Concat(
                 "{\n",
                 "  \"Appearance\": {\n",
@@ -86,6 +88,7 @@ namespace FastFluentFilesFolders.ViewModels
                 "  },\n",
                 "  \"General\": {\n",
                $"    \"HomePageFullPath\": \"{escapedPath}\",\n",
+               $"    \"LastVisitedPath\": \"{escapedLastVisited}\",\n",
                $"    \"DefaultOrderMode\": \"{DefaultOrderMode}\",\n",
                $"    \"Language\": \"{Language}\"\n",
                 "  },\n",

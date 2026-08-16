@@ -68,7 +68,12 @@ namespace FastFluentFilesFolders.UserControls
             if (e.Key == VirtualKey.Enter)
             {
                 var isAltDown = ((int)InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu) & 1) != 0;
-                if (isAltDown)
+                var isCtrlDown = ((int)InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & 1) != 0;
+                var isShiftDown = ((int)InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & 1) != 0;
+
+                // Alt+Enter → properties; plain Enter → open item (handled in MiddleFilesView)
+                // Only let base handle Enter for cell navigation when Ctrl/Shift is held
+                if (!isCtrlDown && !isShiftDown)
                 {
                     return;
                 }

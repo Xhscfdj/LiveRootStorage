@@ -43,8 +43,10 @@ namespace FastFluentFilesFolders.ViewModels
             nameof(FlyoutEmptyFolder), nameof(FlyoutInaccessible),
             nameof(PropertiesTitle), nameof(PropertiesType), nameof(PropertiesPath),
             nameof(PropertiesSize), nameof(PropertiesModified), nameof(PropertiesCreated),
+            nameof(PropertiesProcesses),
             nameof(PropertiesClose), nameof(PropertiesFolder), nameof(PropertiesFile), nameof(PropertiesBytesFmt),
-            nameof(FileOpProgressFmt),
+            nameof(FileOpProgressFmt), nameof(FileOpFailed),
+            nameof(FileOperationsTitle), nameof(ClearCompleted), nameof(NoFileOperations),
             nameof(NewFileDefault), nameof(NewFolderDefault), nameof(NewTextDocumentDefault),
             nameof(NewShortcutDefault), nameof(NewExcelDefault), nameof(NewWordDefault), nameof(NewPPTDefault),
             nameof(AppName), nameof(AppVersion),
@@ -179,11 +181,16 @@ namespace FastFluentFilesFolders.ViewModels
         public string PropertiesSize => _loc.GetString("PropertiesSize");
         public string PropertiesModified => _loc.GetString("PropertiesModified");
         public string PropertiesCreated => _loc.GetString("PropertiesCreated");
+        public string PropertiesProcesses => _loc.GetString("PropertiesProcesses");
         public string PropertiesClose => _loc.GetString("PropertiesClose");
         public string PropertiesFolder => _loc.GetString("PropertiesFolder");
         public string PropertiesFile => _loc.GetString("PropertiesFile");
         public string PropertiesBytesFmt => _loc.GetString("PropertiesBytesFmt");
         public string FileOpProgressFmt => _loc.GetString("FileOpProgressFmt");
+        public string FileOpFailed => _loc.GetString("FileOpFailed");
+        public string FileOperationsTitle => _loc.GetString("FileOperationsTitle");
+        public string ClearCompleted => _loc.GetString("ClearCompleted");
+        public string NoFileOperations => _loc.GetString("NoFileOperations");
 
         public string NewFileDefault => _loc.GetString("NewFileDefault");
         public string NewFolderDefault => _loc.GetString("NewFolderDefault");

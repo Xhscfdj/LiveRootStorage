@@ -1,8 +1,7 @@
-//using System;
+using System;
 using System.Collections.Generic;
-//using System.Linq;
-//using System.Text;
 using System.Threading.Tasks;
+using FastFluentFilesFolders.Models;
 
 namespace FastFluentFilesFolders.Services
 {
@@ -10,7 +9,8 @@ namespace FastFluentFilesFolders.Services
 	{
 		Task CopyToClipBoard(IEnumerable<string> fullPaths, bool cut = false);
 		Task<(IEnumerable<string> FilePaths, bool IsCut)> PasteClipboardFiles();
-		Task CopyToAsync(string from, string to, bool overwrite = false);
+		Task CopyToAsync(string from, string to, bool overwrite = false, Action<FileOperationProgress>? progress = null);
+		Task<(int FileCount, long TotalBytes)> GetTransferStatsAsync(IEnumerable<string> paths);
 		Task DeleteAsync(string fullPath);
 		Task DeleteToRecycleBinAsync(string fullPath);
 		Task RenameAsync(string fullPath, string newName);

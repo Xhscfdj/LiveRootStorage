@@ -81,5 +81,12 @@ Always keep the performance best.
 ## No tests, lint, or CI
 This repo has **no test projects**, no linter/formatter config, no CI pipelines. There is nothing to verify beyond `dotnet build`.
 
+## Changelog
+Always write changelog in "C:\Users\aaron\source\repos\LRS\CHANGELOG.md" after successful changes as:
+> ## <Version>
+> - [ChangeType] [Date] Changelog ...
+> ...
+**Use Chinese**
+
 ## Other things
 默认使用中文对话。

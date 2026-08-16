@@ -3,10 +3,12 @@ using FastFluentFilesFolders.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.System;
 
 namespace FastFluentFilesFolders.Views
 {
@@ -62,13 +64,37 @@ namespace FastFluentFilesFolders.Views
                 {
                     Debug.WriteLine($"[TreeView_SelectionChanged] Setting SelectedFolder to {folder.FullPath}");
                     var vm = DataContext as MainWindowViewModel;
-                    if (vm != null) vm.SelectedFolder = folder;
+                    if (vm != null)
+                    {
+                        if (ReferenceEquals(folder, vm.SelectedFolder))
+                            _ = vm.UpdateCurrentFolderContentAsync(folder, version: null);
+                        else
+                            vm.SelectedFolder = folder;
+                    }
                 }
                 else if (!selectedItem.IsDirectory)
                 {
                     Debug.WriteLine("[TreeView_SelectionChanged] Selected item is not a folder. Setting SelectedFolder to null.");
                 }
             });
+        }
+
+        private void TreeView_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key != VirtualKey.Enter)
+                return;
+
+            var isAltDown = ((int)Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu) & 1) != 0;
+            var isCtrlDown = ((int)Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & 1) != 0;
+
+            if (isAltDown || isCtrlDown)
+                return;
+
+            e.Handled = true;
+            var treeView = sender as TreeView;
+            var selectedItem = treeView?.SelectedItem as FileSystemNodeViewModel;
+            if (selectedItem != null && !selectedItem.IsPlaceholder)
+                VM.OpenItem(selectedItem);
         }
     }
 }

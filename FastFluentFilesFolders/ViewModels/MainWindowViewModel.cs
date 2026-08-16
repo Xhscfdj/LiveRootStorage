@@ -6,6 +6,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.WinUI;
+using FastFluentFilesFolders.Models;
 using FastFluentFilesFolders.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -74,8 +75,9 @@ namespace FastFluentFilesFolders.ViewModels
 						}
 					}
 
-					if (Directory.Exists(AppConfigs.HomePageFullPath))
-						NavigateToPath(AppConfigs.HomePageFullPath);
+					var startPath = GetStartupPath();
+					if (!string.IsNullOrEmpty(startPath) && Directory.Exists(startPath))
+						NavigateToPath(startPath);
 				});
 			}
 			catch (Exception ex)
@@ -86,6 +88,18 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				await _uiDispatcherQueue.EnqueueAsync(() => IsReady = true);
 			}
+		}
+
+		/// <summary>
+		/// 获取启动时应导航到的路径：优先上次访问路径，回退到首页路径
+		/// </summary>
+		private string GetStartupPath()
+		{
+			if (!string.IsNullOrEmpty(AppConfigs.LastVisitedPath) && Directory.Exists(AppConfigs.LastVisitedPath))
+				return AppConfigs.LastVisitedPath;
+			if (!string.IsNullOrEmpty(AppConfigs.HomePageFullPath))
+				return AppConfigs.HomePageFullPath;
+			return string.Empty;
 		}
 		[RelayCommand]
 		private void testFunction()
@@ -130,75 +144,145 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 
 		[RelayCommand]
-		private async Task Paste()
+		private async Task Paste(FileOperationItem? op)
 		{
 			await _pasteLock.WaitAsync();
 			try
 			{
 				var (paths, isCut) = await _fileOperator.PasteClipboardFiles();
-				if (paths == null || !paths.Any()) return;
-
-			var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
-
-			if (isCut && _cutItems.Count > 0)
-			{
-				var srcDir = Path.GetDirectoryName(_cutItems[0].FullPath) ?? "";
-				if (string.Equals(srcDir, destDir, StringComparison.OrdinalIgnoreCase))
+				if (paths == null || !paths.Any())
 				{
-					await _uiDispatcherQueue.EnqueueAsync(() =>
-					{
-						foreach (var item in _cutItems)
-							item.IsCutPending = false;
-						_cutItems.Clear();
-					});
+					CompleteOperation(op, 0, 0);
 					return;
 				}
 
+				_uiDispatcherQueue.TryEnqueue(() => { if (op != null) op.IconGlyph = isCut ? "\uE8AB" : "\uE8C8"; });
+
+				var pathList = paths.ToList();
+				var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
+
+				// 统计待粘贴项的文件总数与总大小，让操作岛显示真实的文件个数与大小
+				var (totalFiles, totalBytes) = await _fileOperator.GetTransferStatsAsync(pathList);
+				UpdateOperationProgress(op, 0, totalFiles, 0, totalBytes);
+
+				if (isCut && _cutItems.Count > 0)
+				{
+					var srcDir = Path.GetDirectoryName(_cutItems[0].FullPath) ?? "";
+					if (string.Equals(srcDir, destDir, StringComparison.OrdinalIgnoreCase))
+					{
+						await _uiDispatcherQueue.EnqueueAsync(() =>
+						{
+							foreach (var item in _cutItems)
+								item.IsCutPending = false;
+							_cutItems.Clear();
+						});
+						CompleteOperation(op, totalFiles, totalBytes);
+						return;
+					}
+
+					await _uiDispatcherQueue.EnqueueAsync(() =>
+					{
+						foreach (var item in _cutItems)
+						{
+							CurrentFolderContent.Remove(item);
+							SelectedFolder?.Children.Remove(item);
+						}
+						ClearCutPending();
+					});
+				}
+
+				var newNodes = new List<(FileSystemNodeViewModel Node, string SourcePath)>();
+				foreach (var srcPath in pathList)
+				{
+					var name = Path.GetFileName(srcPath);
+					var destPath = Path.Combine(destDir, name);
+					if (!isCut)
+						destPath = GenerateUniquePath(destPath);
+					if (isCut)
+						await _fileOperator.MoveAsync(srcPath, destPath);
+					else
+						await _fileOperator.CopyToAsync(srcPath, destPath, false,
+							p => UpdateOperationProgress(op, p.CompletedFiles, totalFiles, p.CompletedBytes, totalBytes));
+
+					bool isDir = Directory.Exists(destPath);
+					var node = new FileSystemNodeViewModel(destPath, isDir, false, AppConfigs, _uiDispatcherQueue, false);
+					_ = node.InitAsync(node.FullPath, isDir);
+					PrepareNodeForGroupedView(node);
+					newNodes.Add((node, srcPath));
+				}
+
+				CompleteOperation(op, totalFiles, totalBytes);
+
 				await _uiDispatcherQueue.EnqueueAsync(() =>
 				{
-					foreach (var item in _cutItems)
+					foreach (var (node, _) in newNodes)
 					{
-						CurrentFolderContent.Remove(item);
-						SelectedFolder?.Children.Remove(item);
+						CurrentFolderContent.Add(node);
+						SelectedFolder?.Children.Add(node);
 					}
-					ClearCutPending();
 				});
+
+				BreadcrumbRefreshRequested?.Invoke();
 			}
-
-			var newNodes = new List<(FileSystemNodeViewModel Node, string SourcePath)>();
-			foreach (var srcPath in paths)
+			catch (Exception ex)
 			{
-				var name = Path.GetFileName(srcPath);
-				var destPath = Path.Combine(destDir, name);
-				if (!isCut)
-					destPath = GenerateUniquePath(destPath);
-				if (isCut)
-					await _fileOperator.MoveAsync(srcPath, destPath);
-				else
-					await _fileOperator.CopyToAsync(srcPath, destPath);
-
-				bool isDir = Directory.Exists(destPath);
-				var node = new FileSystemNodeViewModel(destPath, isDir, false, AppConfigs, _uiDispatcherQueue, false);
-				_ = node.InitAsync(node.FullPath, isDir);
-				PrepareNodeForGroupedView(node);
-				newNodes.Add((node, srcPath));
-			}
-
-			await _uiDispatcherQueue.EnqueueAsync(() =>
-			{
-				foreach (var (node, _) in newNodes)
-				{
-					CurrentFolderContent.Add(node);
-					SelectedFolder?.Children.Add(node);
-				}
-			});
-
-			BreadcrumbRefreshRequested?.Invoke();
+				Debug.WriteLine($"[Paste] 粘贴失败: {ex}");
+				FailOperation(op);
 			}
 			finally
 			{
 				_pasteLock.Release();
 			}
+		}
+
+		/// <summary>
+		/// 将累积进度映射到操作岛显示：文件个数、进度百分比、已传输/总大小。
+		/// </summary>
+		private void UpdateOperationProgress(FileOperationItem? op, int completedFiles, int totalFiles, long completedBytes, long totalBytes)
+		{
+			if (op == null) return;
+			double percent = totalBytes > 0
+				? (double)completedBytes / totalBytes * 100.0
+				: (totalFiles > 0 ? (double)completedFiles / totalFiles * 100.0 : 100.0);
+			_uiDispatcherQueue.TryEnqueue(() =>
+			{
+				op.Progress = Math.Clamp(percent, 0.0, 100.0);
+				op.Process = $"{(int)percent}%";
+				op.FileCount = totalFiles;
+				op.SizeText = $"{FileSystemNodeViewModel.FormatFileSize(completedBytes)} / {FileSystemNodeViewModel.FormatFileSize(totalBytes)}";
+			});
+		}
+
+		/// <summary>
+		/// 标记操作完成：进度 100%，大小显示为总量。
+		/// </summary>
+		private void CompleteOperation(FileOperationItem? op, int totalFiles, long totalBytes)
+		{
+			if (op == null) return;
+			_uiDispatcherQueue.TryEnqueue(() =>
+			{
+				op.Progress = 100;
+				op.Process = "100%";
+				op.FileCount = totalFiles;
+				op.SizeText = $"{FileSystemNodeViewModel.FormatFileSize(totalBytes)} / {FileSystemNodeViewModel.FormatFileSize(totalBytes)}";
+				op.RemainTime = "0";
+				op.State = FileOperationState.Successful;
+			});
+		}
+
+		/// <summary>
+		/// 标记操作失败。
+		/// </summary>
+		private void FailOperation(FileOperationItem? op)
+		{
+			if (op == null) return;
+			_uiDispatcherQueue.TryEnqueue(() =>
+			{
+				op.Progress = 0;
+				op.Process = ML.FileOpFailed;
+				op.RemainTime = "0";
+				op.State = FileOperationState.Error;
+			});
 		}
 
 		private static string GenerateUniquePath(string destPath)
@@ -419,6 +503,13 @@ namespace FastFluentFilesFolders.ViewModels
 			AddRow(App.ML.PropertiesModified, item.LastModifiedTimeString);
 			AddRow(App.ML.PropertiesCreated, item.FirstCreatedTimeString);
 
+			// 使用进程（仅对文件显示）
+			if (!item.IsDirectory)
+			{
+				var processInfo = ProcessHelper.GetProcessesUsingFile(item.FullPath);
+				AddRow(App.ML.PropertiesProcesses, string.IsNullOrEmpty(processInfo) ? "-" : processInfo);
+			}
+
 			panel.Children.Add(propsGrid);
 
 			var dialog = new ContentDialog
@@ -546,6 +637,32 @@ namespace FastFluentFilesFolders.ViewModels
 			}
 		}
 
+		private void DebounceSaveLastVisitedPath(string path)
+		{
+			// 初始化完成前不保存（构造函数中 SelectedFolder=C:\ 会误触发）
+			if (AppConfigs == null || !IsReady) return;
+			AppConfigs.LastVisitedPath = path;
+			_saveConfigCts?.Cancel();
+			_saveConfigCts = new CancellationTokenSource();
+			var token = _saveConfigCts.Token;
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					await Task.Delay(2000, token);
+					if (!token.IsCancellationRequested)
+					{
+						await _uiDispatcherQueue.EnqueueAsync(() =>
+						{
+							if (!token.IsCancellationRequested)
+								AppConfigs?.SaveConfig();
+						});
+					}
+				}
+				catch (TaskCanceledException) { }
+			}, token);
+		}
+
 		[ObservableProperty] private string _testString = "hasn't changed";
 		[ObservableProperty] private ObservableCollection<FileSystemNodeViewModel> _pinnedShortcuts = new();
 		// 文件系统相关的属性和方法
@@ -574,6 +691,7 @@ namespace FastFluentFilesFolders.ViewModels
 		private const int MaxBackDepth = 100;
 		private bool _isNavigatingFromHistory;
 		private FileSystemNodeViewModel? _folderToRelease;
+		private CancellationTokenSource? _saveConfigCts;
 		private ObservableCollection<FileSystemNodeViewModel> _rootDirectories = new();
 		public ObservableCollection<FileSystemNodeViewModel> RootDirectories
 		{
@@ -608,6 +726,8 @@ namespace FastFluentFilesFolders.ViewModels
 				CanGoBack = _backStack.Count > 0;
 				CanGoForward = _forwardStack.Count > 0;
 				_ = UpdateCurrentFolderContentAsync(value, version);
+				// 保存上次访问路径（防抖，避免频繁写入磁盘）
+				DebounceSaveLastVisitedPath(value.FullPath);
 			}
 			else
 			{
@@ -663,6 +783,12 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			if (item.IsDirectory)
 			{
+				// 相同引用时 [ObservableProperty] 会跳过通知，需手动强制刷新
+				if (ReferenceEquals(item, SelectedFolder))
+				{
+					_ = UpdateCurrentFolderContentAsync(item, version: null);
+					return;
+				}
 				if (SelectedFolder?.IsStandalone == true)
 					_folderToRelease = SelectedFolder;
 				SelectedFolder = item;
@@ -808,7 +934,13 @@ namespace FastFluentFilesFolders.ViewModels
 			}
 			var target = FindNodeByPath(path);
 			if (target != null)
-				SelectedFolder = target;
+			{
+				// 相同引用时 [ObservableProperty] 会跳过通知，需手动强制刷新
+				if (ReferenceEquals(target, SelectedFolder))
+					_ = UpdateCurrentFolderContentAsync(target, version: null);
+				else
+					SelectedFolder = target;
+			}
 			else
 				NavigateToNewPath(path);
 		}

@@ -137,6 +137,7 @@
                                            VerticalAlignment="Center"/>
 								<Button Grid.Column="1" Content="{Binding ML.CalculateSize}"
 										Background="Transparent"
+										BorderBrush="Transparent"
 										Foreground="{StaticResource AccentAAFillColorSecondaryBrush}"
                                         Command="{Binding CalculateSizeCommand}"
                                         Visibility="{Binding CalculateSizeButtonVisibility, Mode=OneWay}"

@@ -4,30 +4,110 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:uc="using:FastFluentFilesFolders.UserControls"
+    xmlns:views="using:FastFluentFilesFolders.Views"
     mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <uc:FileOperationStateToBrushConverter x:Key="StateToBrushConverter"
+            InProgressBrush="{ThemeResource AccentFillColorDefaultBrush}"
+            InProgressBackgroundBrush="{ThemeResource AccentFillColorSecondaryBrush}"
+            SuccessfulBrush="{ThemeResource SystemFillColorSuccessBrush}"
+            SuccessfulBackgroundBrush="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+            ErrorBrush="{ThemeResource SystemFillColorCriticalBrush}"
+            ErrorBackgroundBrush="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+            CanceledBrush="{ThemeResource TextFillColorSecondaryBrush}"
+            CanceledBackgroundBrush="{ThemeResource SubtleFillColorSecondaryBrush}"/>
+        <views:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
 
     <Button x:Name="RootBtn"
             Style="{StaticResource SubtleButtonStyle}"
             CornerRadius="4" Padding="8,4"
-            Height="36" Visibility="Collapsed">
+            Height="36">
         <Button.Flyout>
             <Flyout>
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="8" Padding="12" MinWidth="300"
+                        CornerRadius="8" Padding="12" MinWidth="340"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                    <ItemsControl x:Name="OpsList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="0,4,0,8">
-                                    <TextBlock Text="{Binding Text}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4" Margin="0,4,0,0"/>
-                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Text="{Binding ProgressDisplay}"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0">
+                            <TextBlock x:Name="HeaderTitleText"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                            <Button x:Name="ClearCompletedBtn"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    FontSize="12" Padding="8,0"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    Click="ClearCompleted_Click"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1" MaxHeight="420" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="OpsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2" Padding="8"
+                                              Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                              BorderThickness="1" CornerRadius="8">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Grid Grid.Row="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="16"
+                                                        Background="{Binding State, Converter={StaticResource StateToBrushConverter}, ConverterParameter=Background}">
+                                                    <FontIcon Glyph="{Binding DisplayIconGlyph}" FontSize="16"
+                                                              Foreground="{Binding State, Converter={StaticResource StateToBrushConverter}}"/>
+                                                </Border>
+
+                                                <TextBlock Grid.Column="1" Margin="12,0" VerticalAlignment="Center"
+                                                           Text="{Binding Text}" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTipService.ToolTip="{Binding Text}"/>
+
+                                                <Button Grid.Column="2" Width="32" Height="32" Padding="0"
+                                                        Background="Transparent" BorderThickness="0"
+                                                        Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVis}}"
+                                                        Click="CloseItem_Click"
+                                                        ToolTipService.ToolTip="Clear">
+                                                    <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                                                </Button>
+                                            </Grid>
+
+                                            <StackPanel Grid.Row="1" Margin="0,6,0,0"
+                                                        Visibility="{Binding IsInProgress, Converter={StaticResource BoolToVis}}">
+                                                <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
+                                                             Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                                <TextBlock Margin="0,2,0,0" FontSize="11"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                           Text="{Binding ProgressDisplay}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <TextBlock x:Name="EmptyText" Grid.Row="1"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Margin="0,16,0,8" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="Collapsed"/>
+                    </Grid>
                 </Border>
             </Flyout>
         </Button.Flyout>

@@ -700,16 +700,12 @@ namespace FastFluentFilesFolders.Views
                 FileCount = 0,
                 Process = "0%",
                 RemainTime = "...",
-                SizeText = "..."
+                SizeText = "0 B",
+                State = FileOperationState.InProgress,
+                IconGlyph = "\uE77F"
             };
             AddFileOperation(pasteOp);
-            (this.DataContext as MainWindowViewModel)?.PasteCommand.Execute(null);
-            _ = Task.Delay(2000).ContinueWith(_ => DispatcherQueue.TryEnqueue(() =>
-            {
-                pasteOp.Progress = 100;
-                pasteOp.Process = "100%";
-                pasteOp.RemainTime = "0";
-            }));
+            (this.DataContext as MainWindowViewModel)?.PasteCommand.Execute(pasteOp);
         }
         private void OnRenameClick(object sender, RoutedEventArgs e)
         {
@@ -781,15 +777,15 @@ namespace FastFluentFilesFolders.Views
             }
         }
 
-        private void CommitInlineRename(TextBox tb, FileSystemNodeViewModel item)
+        private async void CommitInlineRename(TextBox tb, FileSystemNodeViewModel item)
         {
             var newName = tb.Text.Trim();
             item.IsRenaming = false;
             if (!string.IsNullOrEmpty(newName) && newName != item.Name)
             {
                 item.Name = newName;
-                _ = (this.DataContext as MainWindowViewModel)!.CommitRenameAsync(item, newName);
-                _ = item.RefreshAsync();
+                await (this.DataContext as MainWindowViewModel)!.CommitRenameAsync(item, newName);
+                await item.RefreshAsync();
                 if (this.DataContext is MainWindowViewModel vm)
                     UpdateGroupedSource(vm);
             }
@@ -802,7 +798,7 @@ namespace FastFluentFilesFolders.Views
             {
                 foreach (var item in items)
             {
-                var op = new FileOperationItem { Text = $"{App.ML.CmdDelete} {item.Name}", FileCount = 1, Progress = 100, Process = "100%", RemainTime = "0" };
+                var op = new FileOperationItem { Text = $"{App.ML.CmdDelete} {item.Name}", FileCount = 1, Progress = 100, Process = "100%", RemainTime = "0", State = FileOperationState.Successful, IconGlyph = "\uE74D" };
                 AddFileOperation(op);
             }
             (this.DataContext as MainWindowViewModel)?.DeleteCommand.Execute(items);
@@ -816,7 +812,7 @@ namespace FastFluentFilesFolders.Views
         {
             foreach (var item in items)
             {
-                var op = new FileOperationItem { Text = $"{App.ML.CmdPermanentDelete} {item.Name}", FileCount = 1, Progress = 100, Process = "100%", RemainTime = "0" };
+                var op = new FileOperationItem { Text = $"{App.ML.CmdPermanentDelete} {item.Name}", FileCount = 1, Progress = 100, Process = "100%", RemainTime = "0", State = FileOperationState.Successful, IconGlyph = "\uE74D" };
                 AddFileOperation(op);
             }
             (this.DataContext as MainWindowViewModel)?.PermanentDeleteCommand.Execute(items);
@@ -920,6 +916,13 @@ namespace FastFluentFilesFolders.Views
                 var item = FileGrid.SelectedItem as FileSystemNodeViewModel;
                 if (item != null && !item.IsPlaceholder)
                     (this.DataContext as MainWindowViewModel)?.RenameCommand.Execute(item);
+            }
+            else if (!isCtrlDown && !isAltDown && e.Key == VirtualKey.Enter)
+            {
+                e.Handled = true;
+                var item = FileGrid.SelectedItem as FileSystemNodeViewModel;
+                if (item != null && !item.IsPlaceholder)
+                    (this.DataContext as MainWindowViewModel)?.OpenItem(item);
             }
         }
 

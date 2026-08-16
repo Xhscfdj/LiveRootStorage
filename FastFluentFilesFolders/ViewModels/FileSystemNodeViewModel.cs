@@ -69,6 +69,23 @@ namespace FastFluentFilesFolders.ViewModels
 		[ObservableProperty] private bool _isCutPending = false;
 		[ObservableProperty] private bool _isSizeCalculated = false;
 
+		// 使用进程（懒加载，类似 Icon）
+		private string _processesUsingThisFile = string.Empty;
+		private bool _processInfoRequested;
+		public string ProcessesUsingThisFile
+		{
+			get
+			{
+				if (!_processInfoRequested && !IsPlaceholder && !IsDirectory && _uiDispatcherQueue != null)
+				{
+					_processInfoRequested = true;
+					_uiDispatcherQueue.TryEnqueue(() => _ = LoadProcessInfoAsync());
+				}
+				return _processesUsingThisFile;
+			}
+			set => SetProperty(ref _processesUsingThisFile, value);
+		}
+
 		// 压缩包预览相关：当节点位于压缩包内部时为 true
 		[ObservableProperty] private bool _isArchiveEntry = false;
 		// 物理压缩包文件的完整路径（如 C:\a\test.zip）
@@ -265,9 +282,12 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				if (IsDirectory)
 				{
-					var dirInfo = await Task.Run(() => new DirectoryInfo(FullPath));
-					LastModifiedTime = dirInfo.LastWriteTimeUtc;
-					FirstCreatedTime = dirInfo.CreationTimeUtc;
+					if (Directory.Exists(FullPath))
+					{
+						var dirInfo = await Task.Run(() => new DirectoryInfo(FullPath));
+						LastModifiedTime = dirInfo.LastWriteTimeUtc;
+						FirstCreatedTime = dirInfo.CreationTimeUtc;
+					}
 					ExactSize = 0;
 				}
 				else if (File.Exists(FullPath))
@@ -353,6 +373,28 @@ namespace FastFluentFilesFolders.ViewModels
 			if (IsPlaceholder) return;
 			await LoadBasicInfoAsync();
 			_ = LoadIconAsync(FullPath, IsDirectory);
+		}
+
+		/// <summary>
+		/// 懒加载：异步查询正在使用此文件的进程名称。
+		/// 仅对非目录、非占位符文件生效。
+		/// </summary>
+		private async Task LoadProcessInfoAsync()
+		{
+			if (IsPlaceholder || IsDirectory) return;
+			try
+			{
+				var myPath = FullPath;
+				var result = await Task.Run(() => Services.ProcessHelper.GetProcessesUsingFile(myPath));
+				await _uiDispatcherQueue.EnqueueAsync(() =>
+				{
+					ProcessesUsingThisFile = result;
+				});
+			}
+			catch (Exception ex)
+			{
+				Debug.WriteLine($"[LoadProcessInfo] Error for {FullPath}: {ex.Message}");
+			}
 		}
 
 		public async Task LoadIconAsync(string fullPath, bool isDirectory)

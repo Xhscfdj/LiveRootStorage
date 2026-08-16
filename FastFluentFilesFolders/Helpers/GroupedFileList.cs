@@ -24,6 +24,7 @@ namespace FastFluentFilesFolders.Helpers
         private readonly Dictionary<string, FileSystemNodeViewModel> _groupHeaders = new();
         private DispatcherQueue? _dispatcher;
         private bool _isBatchUpdating;
+        private bool _isGrouped;
 
         public event Action? FlatListChanged;
 
@@ -34,6 +35,7 @@ namespace FastFluentFilesFolders.Helpers
 
         public void SetItems(IEnumerable<FileSystemNodeViewModel> items, bool grouped)
         {
+            _isGrouped = grouped;
             _groupChildren.Clear();
             _groupHeaders.Clear();
 
@@ -63,7 +65,7 @@ namespace FastFluentFilesFolders.Helpers
         public void AddItem(FileSystemNodeViewModel item)
         {
             // 平铺模式（非分组目录）：直接追加，不建组头
-            if (_groupChildren.Count == 0)
+            if (!_isGrouped)
             {
                 Add(item);
                 return;
@@ -99,6 +101,15 @@ namespace FastFluentFilesFolders.Helpers
 
         public void RemoveItem(FileSystemNodeViewModel item)
         {
+            // 平铺模式（非分组目录）：直接从列表中移除
+            if (!_isGrouped)
+            {
+                int idx = IndexOf(item);
+                if (idx >= 0)
+                    RemoveAt(idx);
+                return;
+            }
+
             var key = item.SortByTime;
             if (string.IsNullOrEmpty(key) || !_groupChildren.TryGetValue(key, out var list))
                 return;
@@ -106,9 +117,9 @@ namespace FastFluentFilesFolders.Helpers
 
             if (_isBatchUpdating) return;
 
-            int idx = IndexOf(item);
-            if (idx >= 0)
-                RemoveAt(idx);
+            int idx2 = IndexOf(item);
+            if (idx2 >= 0)
+                RemoveAt(idx2);
 
             if (list.Count == 0)
             {

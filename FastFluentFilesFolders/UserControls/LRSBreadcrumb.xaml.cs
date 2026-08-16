@@ -145,6 +145,9 @@ namespace FastFluentFilesFolders.UserControls
             ToolTipService.SetToolTip(SearchButton, App.ML.TooltipSearch);
             ToolTipService.SetToolTip(CopyPathButton, App.ML.TooltipCopyPath);
 
+            // Backspace 触发回退（地址栏编辑或文本框聚焦时不拦截）
+            this.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnBreadcrumbKeyDown), true);
+
             this.Loaded += (s, e) =>
             {
                 _compositor = ElementCompositionPreview.GetElementVisual(this).Compositor;
@@ -370,6 +373,19 @@ namespace FastFluentFilesFolders.UserControls
         private void OnPathTextBoxLostFocus(object sender, RoutedEventArgs e)
         {
             IsEditing = false;
+        }
+
+        private void OnBreadcrumbKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key != VirtualKey.Back)
+                return;
+
+            // 地址栏编辑中或焦点在文本框时，让 Backspace 正常删除字符
+            if (_isEditing || e.OriginalSource is TextBox)
+                return;
+
+            e.Handled = true;
+            GoBackCommand?.Execute(null);
         }
 
         private static void OnCurrentPathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
