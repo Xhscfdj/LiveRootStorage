@@ -34,9 +34,9 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-
-                <TitleBar x:Name="AppTitleBar"
-                      Title="{Binding ML.AppName}" Subtitle="v1.0.1">
+                
+                <TitleBar Height="0" x:Name="AppTitleBar"
+                      Title="{Binding ML.AppName}" Subtitle="v1.0.2">
                     <TitleBar.IconSource>
                         <FontIconSource Glyph="&#xE838;"/>
                     </TitleBar.IconSource>

@@ -15,13 +15,14 @@ namespace FastFluentFilesFolders.ViewModels
             nameof(UseWin32Icon), nameof(PerformanceSection), nameof(IconParallelLoading), nameof(DebugSection),
             nameof(UserConfigPath), nameof(SaveSettings), nameof(LanguageLabel), nameof(AboutSection),
             nameof(AuthorTip), nameof(RepositoryTip),
-            nameof(ColumnName), nameof(ColumnModifiedDate), nameof(ColumnCreatedDate), nameof(ColumnSize),
+			nameof(ColumnName), nameof(ColumnModifiedDate), nameof(ColumnCreatedDate), nameof(ColumnSize),
+			nameof(OpenFileLocation),
             nameof(CalculateSize),
             nameof(ItemCountSuffix),
             nameof(PinnedShortcutsTitle),
             nameof(CmdCut), nameof(CmdCopy), nameof(CmdPaste), nameof(CmdRename), nameof(CmdDelete),
             nameof(CmdPermanentDelete), nameof(CmdOpen), nameof(CmdOpenWith), nameof(CmdCopyPath),
-            nameof(CmdProperties), nameof(NewTextDocument), nameof(NewShortcut), nameof(NewFile),
+            nameof(CmdCopyFileAddress), nameof(CmdProperties), nameof(NewTextDocument), nameof(NewShortcut), nameof(NewFile),
             nameof(NewExcelSpreadsheet), nameof(NewWordDocument), nameof(NewPowerPointPresentation),
             nameof(CmdNew), nameof(CmdNewFolder), nameof(CmdShowMoreOptions),
             nameof(CmdSort),
@@ -38,6 +39,7 @@ namespace FastFluentFilesFolders.ViewModels
             nameof(PluginsPageTitle), nameof(PluginsSettingsHeader),
             nameof(TooltipBack), nameof(TooltipForward), nameof(TooltipUp), nameof(TooltipRefresh),
             nameof(TooltipHome), nameof(TooltipSearch), nameof(TooltipCopyPath),
+            nameof(TooltipNewTab), nameof(TooltipCloseTab),
             nameof(SearchPlaceholder), nameof(SearchStartHint), nameof(SearchLoading),
             nameof(SearchNoResults), nameof(SearchInProgress),
             nameof(FlyoutEmptyFolder), nameof(FlyoutInaccessible),
@@ -93,6 +95,7 @@ namespace FastFluentFilesFolders.ViewModels
         public string ColumnModifiedDate => _loc.GetString("ColumnModifiedDate");
         public string ColumnCreatedDate => _loc.GetString("ColumnCreatedDate");
         public string ColumnSize => _loc.GetString("ColumnSize");
+        public string OpenFileLocation => _loc.GetString("OpenFileLocation");
         public string CalculateSize => _loc.GetString("CalculateSize");
         public string ItemCountSuffix => _loc.GetString("ItemCountSuffix");
 
@@ -107,6 +110,7 @@ namespace FastFluentFilesFolders.ViewModels
         public string CmdOpen => _loc.GetString("CmdOpen");
         public string CmdOpenWith => _loc.GetString("CmdOpenWith");
         public string CmdCopyPath => _loc.GetString("CmdCopyPath");
+        public string CmdCopyFileAddress => _loc.GetString("CmdCopyFileAddress");
         public string GoHome => _loc.GetString("GoHome");
         public string CmdProperties => _loc.GetString("CmdProperties");
         public string NewTextDocument => _loc.GetString("NewTextDocument");
@@ -166,6 +170,8 @@ namespace FastFluentFilesFolders.ViewModels
         public string TooltipHome => _loc.GetString("TooltipHome");
         public string TooltipSearch => _loc.GetString("TooltipSearch");
         public string TooltipCopyPath => _loc.GetString("TooltipCopyPath");
+        public string TooltipNewTab => _loc.GetString("TooltipNewTab");
+        public string TooltipCloseTab => _loc.GetString("TooltipCloseTab");
 
         public string SearchPlaceholder => _loc.GetString("SearchPlaceholder");
         public string SearchStartHint => _loc.GetString("SearchStartHint");

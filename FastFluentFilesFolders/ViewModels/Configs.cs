@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -22,7 +22,9 @@ namespace FastFluentFilesFolders.ViewModels
         [ObservableProperty] private int _middleFilesHeight = 40;
         [ObservableProperty] private bool _ifUsesWin32APIToGetIcon = true;
         [ObservableProperty] private bool _ifLimitIconLoadingConcurrency = false;
-        [ObservableProperty] private int _iconParallelLoadingCount = 30;
+        // 0 = 自动（默认，使用安全并发上限 16，避免 Shell/GDI+ 并发过高偶发失败）；
+        // >0 表示最多同时解码多少个图标
+        [ObservableProperty] private int _iconParallelLoadingCount = 0;
         [ObservableProperty] private string _homePageFullPath = DefaultDownloadsPath;
         [ObservableProperty] private string _lastVisitedPath = "";
         [ObservableProperty] private string _defaultOrderMode = "ModifiedDesc";
@@ -63,11 +65,11 @@ namespace FastFluentFilesFolders.ViewModels
             IfUsesWin32APIToGetIcon = configuration.GetValue("Advanced:ifUsesWin32APIToGetIcon", true);
             HomePageFullPath = configuration.GetValue("General:HomePageFullPath", DefaultDownloadsPath)!;
             LastVisitedPath = configuration.GetValue("General:LastVisitedPath", "")!;
-            IconParallelLoadingCount = configuration.GetValue("Performance:IconParallelLoadingCount", 30);
+            IconParallelLoadingCount = configuration.GetValue("Performance:IconParallelLoadingCount", 0);
             DefaultOrderMode = configuration.GetValue("General:DefaultOrderMode", "ModifiedDesc")!;
             Language = configuration.GetValue("General:Language", "zh-Hans")!;
             SystemBackdropMode = configuration.GetValue("Appearance:SystemBackdropMode", "Mica")!;
-            if (IconParallelLoadingCount != 0) IfLimitIconLoadingConcurrency = true;
+            IfLimitIconLoadingConcurrency = IconParallelLoadingCount > 0;
             var folderArray = configuration.GetSection("Special:TimeGroupedFolders").Get<string[]>();
             TimeGroupedFolders = new System.Collections.ObjectModel.ObservableCollection<string>(
                 folderArray != null && folderArray.Length > 0 ? folderArray : new[] { DefaultDownloadsPath });

@@ -40,12 +40,22 @@ namespace FastFluentFilesFolders.ViewModels
 			_uiDispatcherQueue = uiDispatcherQueue;
 			_iconProvider = iconProvider;
 			ML = ml;
+
+			// 初始标签页
+			var firstTab = new ExplorerTab { Title = GetTabTitle(configs.HomePageFullPath) };
+			firstTab.SearchResults = SearchResults;
+			Tabs.Add(firstTab);
+			SelectedTab = firstTab;
+
 			NavigateToPathCommand = new RelayCommand<string>(NavigateToPath);
 			NavigateToSubFolderCommand = new RelayCommand<string>(NavigateToPath);
 			GoBackCommand = new RelayCommand(GoBack);
 			GoForwardCommand = new RelayCommand(GoForward);
 			GoUpCommand = new RelayCommand(GoUp);
-			if (configs.IconParallelLoadingCount != 0)
+			// 把图标解码并发上限接入实际生效的信号量：0 = 自动（安全上限 16，避免并发过高偶发失败），
+			// >0 = 按配置限流；避免大文件夹进入时图标逐项“轮流替换”造成拖沓感
+			FileSystemNodeViewModel.ConfigureIconLoadConcurrency(configs.IconParallelLoadingCount);
+			if (configs.IconParallelLoadingCount > 0)
 				IconLoadSemaphore = new(configs.IconParallelLoadingCount, configs.IconParallelLoadingCount);
 
 			foreach (var drive in DriveInfo.GetDrives())
@@ -316,8 +326,18 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				foreach (var item in items)
 				{
-					CurrentFolderContent.Remove(item);
-					SelectedFolder?.Children.Remove(item);
+					if (IsSearchMode)
+						SearchResults.Remove(item);
+					else
+					{
+						CurrentFolderContent.Remove(item);
+						SelectedFolder?.Children.Remove(item);
+					}
+				}
+				if (IsSearchMode)
+				{
+					OnPropertyChanged(nameof(SearchResults));
+					OnPropertyChanged(nameof(DisplayedItemCount));
 				}
 			});
 		}
@@ -332,8 +352,18 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				foreach (var item in items)
 				{
-					CurrentFolderContent.Remove(item);
-					SelectedFolder?.Children.Remove(item);
+					if (IsSearchMode)
+						SearchResults.Remove(item);
+					else
+					{
+						CurrentFolderContent.Remove(item);
+						SelectedFolder?.Children.Remove(item);
+					}
+				}
+				if (IsSearchMode)
+				{
+					OnPropertyChanged(nameof(SearchResults));
+					OnPropertyChanged(nameof(DisplayedItemCount));
 				}
 			});
 		}
@@ -365,6 +395,7 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 
 		public event Action? BreadcrumbRefreshRequested;
+		public event Action<FileSystemNodeViewModel>? SelectItemRequested;
 
 		public void RequestBreadcrumbRefresh() => BreadcrumbRefreshRequested?.Invoke();
 
@@ -631,6 +662,8 @@ namespace FastFluentFilesFolders.ViewModels
 		{
 			if (SelectedFolder != null)
 			{
+				// 强制刷新：清空展示标记，使 UpdateCurrentFolderContentAsync 重建列表
+				_displayedFolderNode = null;
 				await SelectedFolder.ReloadChildrenAsync();
 				await UpdateCurrentFolderContentAsync(SelectedFolder, version: null);
 				BreadcrumbRefreshRequested?.Invoke();
@@ -675,6 +708,307 @@ namespace FastFluentFilesFolders.ViewModels
 		[ObservableProperty] private bool _canGoForward;
 		[ObservableProperty] private bool _isSettingsOpen;
 		[ObservableProperty] private bool _isReady;
+		[ObservableProperty] private bool _isSearchMode = false;
+		[ObservableProperty] private string _searchText = string.Empty;
+		[ObservableProperty] private ObservableCollection<FileSystemNodeViewModel> _searchResults = new();
+		[ObservableProperty] private bool _isSearching = false;
+		private CancellationTokenSource? _searchCts;
+
+		public int DisplayedItemCount => IsSearchMode ? SearchResults.Count : CurrentFolderContent.Count;
+		partial void OnIsSearchModeChanged(bool value) => OnPropertyChanged(nameof(DisplayedItemCount));
+
+		partial void OnSearchTextChanged(string value) => TriggerSearch(value);
+
+		// ===== 多标签页 =====
+		public ObservableCollection<ExplorerTab> Tabs { get; } = new();
+		[ObservableProperty] private ExplorerTab? _selectedTab;
+		public ExplorerTab? CurrentTab => SelectedTab;
+		private bool _isRestoringTab;
+
+		[RelayCommand]
+		private void NewTab()
+		{
+			var path = GetStartupPath();
+			var tab = new ExplorerTab();
+			if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+			{
+				tab.Path = path;
+				tab.Title = GetTabTitle(path);
+			}
+			else
+			{
+				tab.Title = ML.NavExplorer;
+			}
+			Tabs.Add(tab);
+			SwitchToTab(tab);
+		}
+
+		public void CloseCurrentTab()
+		{
+			if (SelectedTab != null) CloseTab(SelectedTab);
+		}
+
+		public void CloseTab(ExplorerTab tab)
+		{
+			if (tab == null || Tabs.Count <= 1) return; // 至少保留一个标签页
+			var index = Tabs.IndexOf(tab);
+			var wasActive = ReferenceEquals(tab, SelectedTab);
+
+			if (wasActive)
+			{
+				SaveTabState(tab);
+				var next = index + 1 < Tabs.Count ? Tabs[index + 1] : Tabs[index - 1];
+				SelectedTab = next;
+				ActivateTab(next);
+				tab.SearchCts?.Cancel();
+				Tabs.Remove(tab);
+			}
+			else
+			{
+				tab.SearchCts?.Cancel();
+				Tabs.Remove(tab);
+			}
+		}
+
+		public void SwitchToTab(ExplorerTab tab)
+		{
+			if (tab == null || ReferenceEquals(tab, SelectedTab)) return;
+			if (SelectedTab != null)
+			{
+				SaveTabState(SelectedTab);
+				SelectedTab.SearchCts?.Cancel();
+			}
+			SelectedTab = tab;
+			ActivateTab(tab);
+		}
+
+		private void SaveTabState(ExplorerTab tab)
+		{
+			if (tab == null) return;
+			tab.Path = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
+			tab.FolderNode = SelectedFolder;
+			tab.IsSearchMode = IsSearchMode;
+			tab.SearchText = SearchText;
+			tab.IsSearching = IsSearching;
+			tab.SearchResults = SearchResults;
+			tab.SearchCts = _searchCts;
+		}
+
+		private void ActivateTab(ExplorerTab tab)
+		{
+			if (tab == null) return;
+
+			// 恢复搜索状态（恢复过程中不重复触发搜索）
+			var searchText = tab.SearchText;
+			var restartSearch = tab.IsSearching;
+			_isRestoringTab = true;
+			try
+			{
+				SearchResults = tab.SearchResults;
+				SearchText = searchText;
+				IsSearchMode = tab.IsSearchMode;
+				IsSearching = tab.IsSearching;
+			}
+			finally
+			{
+				_isRestoringTab = false;
+			}
+			OnPropertyChanged(nameof(SearchResults));
+			OnPropertyChanged(nameof(DisplayedItemCount));
+
+			// 恢复导航状态
+			var path = string.IsNullOrEmpty(tab.Path) ? GetStartupPath() : tab.Path;
+			CurrentBreadcrumbPath = path;
+			tab.IsNavigatingFromHistory = true;
+			try
+			{
+				var target = tab.FolderNode
+					?? FindNodeByPath(path)
+					?? CreateStandaloneNode(path);
+				if (target != null)
+				{
+					tab.FolderNode = target;
+					SelectedFolder = target;
+				}
+				else
+				{
+					CurrentFolderContent.Clear();
+				}
+			}
+			finally
+			{
+				tab.IsNavigatingFromHistory = false;
+			}
+
+			CanGoBack = tab.BackStack.Count > 0;
+			CanGoForward = tab.ForwardStack.Count > 0;
+
+			// 切回标签页时，若上次离开时搜索仍在进行，则重新发起搜索
+			if (restartSearch && tab.IsSearchMode && !string.IsNullOrEmpty(searchText))
+				TriggerSearch(searchText);
+
+			RequestBreadcrumbRefresh();
+		}
+
+		private FileSystemNodeViewModel? CreateStandaloneNode(string path)
+		{
+			if (string.IsNullOrEmpty(path)) return null;
+			if (ArchiveHelper.IsArchiveVirtualPath(path, out var archiveFile, out var relative))
+			{
+				var node = FileSystemNodeViewModel.CreateArchiveDirectory(archiveFile, relative, AppConfigs!, _uiDispatcherQueue);
+				node.IsStandalone = true;
+				return node;
+			}
+			if (!Directory.Exists(path)) return null;
+			// lazyLoad: true —— 恢复标签页时同样避免重复枚举，子项由 UpdateCurrentFolderContentAsync 加载一次
+			var newNode = new FileSystemNodeViewModel(path, true, false, AppConfigs!, _uiDispatcherQueue, true);
+			newNode.IsStandalone = true;
+			return newNode;
+		}
+
+		private static string GetTabTitle(string path)
+		{
+			if (string.IsNullOrEmpty(path)) return string.Empty;
+			if (ArchiveHelper.IsArchiveVirtualPath(path, out var archiveFile, out var relative))
+				path = string.IsNullOrEmpty(relative) ? archiveFile : relative;
+			var name = Path.GetFileName(path.TrimEnd('\\'));
+			return string.IsNullOrEmpty(name) ? path.TrimEnd('\\') : name;
+		}
+
+		public void EnterSearchMode()
+		{
+			// 已是搜索模式时（例如切换标签页恢复搜索 UI）不清空已有结果
+			if (!IsSearchMode)
+			{
+				SearchResults.Clear();
+				SearchText = string.Empty;
+				IsSearchMode = true;
+			}
+			if (CurrentTab != null) CurrentTab.IsSearchMode = true;
+		}
+
+		public void ExitSearchMode()
+		{
+			_searchCts?.Cancel();
+			IsSearchMode = false;
+			SearchText = string.Empty;
+			SearchResults.Clear();
+			if (CurrentTab != null)
+			{
+				CurrentTab.IsSearchMode = false;
+				CurrentTab.SearchText = string.Empty;
+			}
+		}
+
+		private void TriggerSearch(string query)
+		{
+			if (_isRestoringTab) return;
+			var tab = CurrentTab;
+			_searchCts?.Cancel();
+			_searchCts = new CancellationTokenSource();
+			var token = _searchCts.Token;
+			if (tab != null)
+			{
+				tab.SearchCts = _searchCts;
+				tab.SearchText = query;
+			}
+			query = query.Trim();
+			if (query.Length == 0)
+			{
+				IsSearching = false;
+				if (tab != null) tab.IsSearching = false;
+				SearchResults.Clear();
+				OnPropertyChanged(nameof(SearchResults));
+				OnPropertyChanged(nameof(DisplayedItemCount));
+				return;
+			}
+			var scope = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
+			if (string.IsNullOrEmpty(scope) || !Directory.Exists(scope))
+			{
+				IsSearching = false;
+				if (tab != null) tab.IsSearching = false;
+				return;
+			}
+			IsSearching = true;
+			if (tab != null) tab.IsSearching = true;
+			SearchResults.Clear();
+			OnPropertyChanged(nameof(SearchResults));
+			OnPropertyChanged(nameof(DisplayedItemCount));
+			_ = Task.Run(() => RunSearchAsync(scope, query, token), token);
+		}
+
+		private async Task RunSearchAsync(string scope, string query, CancellationToken token)
+		{
+			var results = new List<FileSystemNodeViewModel>();
+			var sw = System.Diagnostics.Stopwatch.StartNew();
+			var indexed = await Services.WindowsSearchHelper.QueryIndexAsync(scope, query, token);
+			sw.Stop();
+			System.Diagnostics.Debug.WriteLine($"[Search] index query {sw.ElapsedMilliseconds}ms, hits={indexed.Count}");
+			if (token.IsCancellationRequested) return;
+			if (indexed.Count > 0)
+			{
+				foreach (var (path, isDir) in indexed)
+					results.Add(CreateSearchNode(path, isDir));
+			}
+			else
+			{
+				SearchRecursive(scope, query, results, token); // 索引无结果/失败/非索引位置 → 回退
+			}
+			if (token.IsCancellationRequested) return;
+			await _uiDispatcherQueue.EnqueueAsync(() =>
+			{
+				if (token.IsCancellationRequested) return;
+				SearchResults.Clear();
+				foreach (var r in results) SearchResults.Add(r);
+				OnPropertyChanged(nameof(SearchResults));
+				OnPropertyChanged(nameof(DisplayedItemCount));
+				IsSearching = false;
+				if (CurrentTab != null) CurrentTab.IsSearching = false;
+			});
+		}
+
+		private static List<string> EnumerateDirsSafe(string dir)
+		{
+			try { return Directory.EnumerateDirectories(dir).ToList(); }
+			catch { return new List<string>(); } // 无权限/不存在 → 返回空，由调用方跳过
+		}
+		private static List<string> EnumerateFilesSafe(string dir)
+		{
+			try { return Directory.EnumerateFiles(dir).ToList(); }
+			catch { return new List<string>(); } // 无权限/不存在 → 返回空，由调用方跳过
+		}
+
+		private void SearchRecursive(string dir, string query, List<FileSystemNodeViewModel> results, CancellationToken token)
+		{
+			if (token.IsCancellationRequested || results.Count >= 200) return;
+			foreach (var sub in EnumerateDirsSafe(dir))
+			{
+				if (token.IsCancellationRequested || results.Count >= 200) break;
+				if (Path.GetFileName(sub).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+					results.Add(CreateSearchNode(sub, true));
+				SearchRecursive(sub, query, results, token);
+			}
+			if (token.IsCancellationRequested || results.Count >= 200) return;
+			foreach (var file in EnumerateFilesSafe(dir))
+			{
+				if (token.IsCancellationRequested || results.Count >= 200) break;
+				if (Path.GetFileName(file).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+					results.Add(CreateSearchNode(file, false));
+			}
+		}
+
+		private FileSystemNodeViewModel CreateSearchNode(string path, bool isDir)
+		{
+			var node = new FileSystemNodeViewModel(path, isDir, false, AppConfigs!, _uiDispatcherQueue, true);
+			try
+			{
+				if (isDir) { var d = new DirectoryInfo(path); node.ApplyMetadata(true, 0, d.LastWriteTimeUtc, d.CreationTimeUtc); }
+				else { var f = new FileInfo(path); node.ApplyMetadata(false, f.Length, f.LastWriteTimeUtc, f.CreationTimeUtc); }
+			}
+			// 元数据读取失败时保留默认值
+			catch { }
+			return node;
+		}
 
 		public Microsoft.UI.Xaml.Visibility FileTableVisibility => IsSettingsOpen ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
 		public Microsoft.UI.Xaml.Visibility SettingsVisibility => IsSettingsOpen ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
@@ -685,12 +1019,7 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 		public SemaphoreSlim IconLoadSemaphore = new(30, 30); // 最多30个并发
 		private readonly SemaphoreSlim _pasteLock = new(1, 1);
-		private readonly List<string> _backStack = new();
-		private readonly List<string> _forwardStack = new();
-		private int _navigationVersion;
 		private const int MaxBackDepth = 100;
-		private bool _isNavigatingFromHistory;
-		private FileSystemNodeViewModel? _folderToRelease;
 		private CancellationTokenSource? _saveConfigCts;
 		private ObservableCollection<FileSystemNodeViewModel> _rootDirectories = new();
 		public ObservableCollection<FileSystemNodeViewModel> RootDirectories
@@ -700,31 +1029,41 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 		private Microsoft.UI.Dispatching.DispatcherQueue _uiDispatcherQueue;
 		[ObservableProperty] private FileSystemNodeViewModel? _selectedFolder;
+		// 当前表格正在展示其内容的文件夹节点：重复进入同一文件夹时跳过无谓的重建
+		private FileSystemNodeViewModel? _displayedFolderNode;
 
 		public bool IsCurrentFolderSpecial => SelectedFolder?.WillSplitToDifferentSorts ?? false;
 
 		partial void OnSelectedFolderChanged(FileSystemNodeViewModel? value)
 		{
-			var version = ++_navigationVersion;
-			if (_folderToRelease != null && _folderToRelease != value)
+			var tab = CurrentTab;
+			var version = tab != null ? ++tab.NavigationVersion : 1;
+			if (tab != null && tab.FolderToRelease != null && tab.FolderToRelease != value)
 			{
-				_folderToRelease.Children.Clear();
-				_folderToRelease = null;
+				// 释放子项缓存并重置加载状态，避免退回该文件夹时显示为空
+				tab.FolderToRelease.ReleaseChildren();
+				tab.FolderToRelease = null;
 			}
 			Debug.WriteLine($"\n----Selected:{value?.Name}\n");
 			Debug.WriteLine($"OnSelectedFolderChanged called with value: {value?.FullPath ?? "null"}");
 			Debug.WriteLine($"Is UI thread? {_uiDispatcherQueue.HasThreadAccess}");
 			if (value != null)
 			{
-				if (!_isNavigatingFromHistory && _previousPath != null && _previousPath != value.FullPath)
+				if (tab != null && !tab.IsNavigatingFromHistory && tab.PreviousPath != null && tab.PreviousPath != value.FullPath)
 				{
-					_backStack.Add(_previousPath);
-					if (_backStack.Count > MaxBackDepth) _backStack.RemoveAt(0);
-					_forwardStack.Clear();
+					tab.BackStack.Add(tab.PreviousPath);
+					if (tab.BackStack.Count > MaxBackDepth) tab.BackStack.RemoveAt(0);
+					tab.ForwardStack.Clear();
 				}
-				_previousPath = value.FullPath;
-				CanGoBack = _backStack.Count > 0;
-				CanGoForward = _forwardStack.Count > 0;
+				if (tab != null)
+				{
+					tab.PreviousPath = value.FullPath;
+					tab.Path = value.FullPath;
+					tab.FolderNode = value;
+					tab.Title = GetTabTitle(value.FullPath);
+				}
+				CanGoBack = tab != null && tab.BackStack.Count > 0;
+				CanGoForward = tab != null && tab.ForwardStack.Count > 0;
 				_ = UpdateCurrentFolderContentAsync(value, version);
 				// 保存上次访问路径（防抖，避免频繁写入磁盘）
 				DebounceSaveLastVisitedPath(value.FullPath);
@@ -734,7 +1073,6 @@ namespace FastFluentFilesFolders.ViewModels
 				CurrentFolderContent.Clear();
 			}
 		}
-		private string? _previousPath;
 
 		public async Task UpdateCurrentFolderContentAsync(FileSystemNodeViewModel? folder, int? version)
 		{
@@ -746,8 +1084,13 @@ namespace FastFluentFilesFolders.ViewModels
 
 			CancelRename();
 
+			// 守卫0: 表格已在展示同一个文件夹且子项已加载（且无待选中项）时，
+			// 内容与 Children 保持一致，跳过 Clear+Add 重建，避免点击当前目录等场景卡顿
+			if (ReferenceEquals(folder, _displayedFolderNode) && folder.IsLoaded && CurrentTab?.PendingSelectPath == null)
+				return;
+
 			// 守卫1: 开始异步加载前先检查——过期任务跳过磁盘 I/O
-			if (version.HasValue && version.Value != _navigationVersion) return;
+			if (version.HasValue && version.Value != (CurrentTab?.NavigationVersion ?? -1)) return;
 
 			try
 			{
@@ -757,20 +1100,32 @@ namespace FastFluentFilesFolders.ViewModels
 					await folder.LoadChildrenAsync();
 				}
 
-				// 此时 folder.Children 已经在 UI 线程完成填充，可以直接读取
-				// 但为了线程安全，仍然在 UI 线程执行 Clear + Add
+				// 整表替换：构建新集合一次性赋值（新集合无订阅者，构建零事件开销），
+				// 由 PropertyChanged → UpdateGroupedSource → UpdateSource 做一次整表刷新，
+				// 避免旧实现“先 Clear 清空再逐条 Add”造成的替换感与分组模式 O(N²) 插入。
 				await _uiDispatcherQueue.EnqueueAsync(() =>
 				{
 					// 守卫2: UI 线程回写前再检查——过期写入丢弃
-					if (version.HasValue && version.Value != _navigationVersion) return;
-					CurrentFolderContent.Clear();
+					if (version.HasValue && version.Value != (CurrentTab?.NavigationVersion ?? -1)) return;
+					var newContent = new ObservableCollection<FileSystemNodeViewModel>();
 					foreach (var item in folder.Children)
 					{
 						if (!item.IsPlaceholder)
-							CurrentFolderContent.Add(item);
+							newContent.Add(item);
 					}
+					CurrentFolderContent = newContent;
 					CurrentBreadcrumbPath = folder.FullPath;
+					_displayedFolderNode = folder;
 					OnPropertyChanged(nameof(IsCurrentFolderSpecial));
+					var tab = CurrentTab;
+					if (tab?.PendingSelectPath != null)
+					{
+						var pending = tab.PendingSelectPath;
+						tab.PendingSelectPath = null;
+						var target = CurrentFolderContent.FirstOrDefault(n => string.Equals(n.FullPath, pending, StringComparison.OrdinalIgnoreCase));
+						if (target != null)
+							SelectItemRequested?.Invoke(target);
+					}
 				});
 			}
 			catch (Exception ex)
@@ -779,8 +1134,23 @@ namespace FastFluentFilesFolders.ViewModels
 			}
 		}
 
+		public void OpenFileLocation(FileSystemNodeViewModel item)
+		{
+			var parent = Path.GetDirectoryName(item.FullPath);
+			if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent)) return;
+			if (CurrentTab != null) CurrentTab.PendingSelectPath = item.FullPath;
+			ExitSearchMode();
+			NavigateToPath(parent);
+		}
+
 		public void OpenItem(FileSystemNodeViewModel item)
 		{
+			if (IsSearchMode)
+			{
+				if (item.IsDirectory) { ExitSearchMode(); NavigateToPath(item.FullPath); }
+				else OpenWithDefaultProgram(item.FullPath);
+				return;
+			}
 			if (item.IsDirectory)
 			{
 				// 相同引用时 [ObservableProperty] 会跳过通知，需手动强制刷新
@@ -789,8 +1159,8 @@ namespace FastFluentFilesFolders.ViewModels
 					_ = UpdateCurrentFolderContentAsync(item, version: null);
 					return;
 				}
-				if (SelectedFolder?.IsStandalone == true)
-					_folderToRelease = SelectedFolder;
+				if (SelectedFolder?.IsStandalone == true && CurrentTab != null)
+					CurrentTab.FolderToRelease = SelectedFolder;
 				SelectedFolder = item;
 
 			}
@@ -927,15 +1297,17 @@ namespace FastFluentFilesFolders.ViewModels
 
 		private void NavigateToPath(string path)
 		{
+			if (IsSearchMode) ExitSearchMode();
 			if (ArchiveHelper.IsArchiveVirtualPath(path, out var archiveFile, out var relative))
 			{
 				NavigateToArchivePath(archiveFile, relative);
 				return;
 			}
-			var target = FindNodeByPath(path);
+			var target = FindNodeByPathFast(path);
 			if (target != null)
 			{
-				// 相同引用时 [ObservableProperty] 会跳过通知，需手动强制刷新
+				// 相同引用时 [ObservableProperty] 会跳过通知：仅做轻量重绘（已展示时会被守卫跳过），
+				// 不做磁盘重载——刷新按钮走 RefreshCurrentFolderAsync
 				if (ReferenceEquals(target, SelectedFolder))
 					_ = UpdateCurrentFolderContentAsync(target, version: null);
 				else
@@ -943,6 +1315,82 @@ namespace FastFluentFilesFolders.ViewModels
 			}
 			else
 				NavigateToNewPath(path);
+		}
+
+		/// <summary>
+		/// 为固定栏等独立节点寻找最优导航目标：
+		/// 当前文件夹 → 直接子项 → 同目录（父目录子项，固定栏同目录切换最常见）→ 祖先链。
+		/// 全部为 O(子项数)/O(深度)，不做全树递归；未命中时回退到传入的节点自身
+		/// （其可能已在之前的访问中加载过）。
+		/// </summary>
+		public FileSystemNodeViewModel? FindBestNodeForNavigation(FileSystemNodeViewModel fallback)
+		{
+			if (fallback == null || !fallback.IsDirectory) return fallback;
+			var path = fallback.FullPath;
+			var current = SelectedFolder;
+			if (current != null && string.Equals(current.FullPath, path, StringComparison.OrdinalIgnoreCase))
+				return current;
+
+			// 当前文件夹的直接子项
+			if (current?.IsLoaded == true)
+			{
+				foreach (var child in current.Children)
+				{
+					if (!child.IsPlaceholder && string.Equals(child.FullPath, path, StringComparison.OrdinalIgnoreCase))
+						return child;
+				}
+			}
+
+			// 同目录切换：当前文件夹的父目录中的同级节点（固定栏在同目录内切换两个文件夹）
+			var parent = current?.Parent;
+			if (parent?.IsLoaded == true)
+			{
+				foreach (var child in parent.Children)
+				{
+					if (!child.IsPlaceholder && string.Equals(child.FullPath, path, StringComparison.OrdinalIgnoreCase))
+						return child;
+				}
+			}
+
+			// 祖先链（向上/后退）
+			for (var ancestor = parent; ancestor != null; ancestor = ancestor.Parent)
+			{
+				if (string.Equals(ancestor.FullPath, path, StringComparison.OrdinalIgnoreCase))
+					return ancestor;
+			}
+
+			return fallback;
+		}
+
+		/// <summary>
+		/// 查找导航目标节点。先走 O(1)/O(子项数)/O(深度) 的快速路径（当前文件夹、直接子项、祖先链），
+		/// 避免面包屑/后退/前进/地址栏等每次导航都对整棵已加载目录树做递归搜索造成小卡顿；
+		/// 快速路径未命中才回退到全树递归查找（用于树中其它分支的节点）。
+		/// </summary>
+		private FileSystemNodeViewModel? FindNodeByPathFast(string fullPath)
+		{
+			var current = SelectedFolder;
+			if (current != null && string.Equals(current.FullPath, fullPath, StringComparison.OrdinalIgnoreCase))
+				return current;
+
+			// 最常见场景：导航到当前文件夹的直接子项（面包屑下一级/后退/地址栏）
+			if (current != null && current.IsLoaded)
+			{
+				foreach (var child in current.Children)
+				{
+					if (!child.IsPlaceholder && string.Equals(child.FullPath, fullPath, StringComparison.OrdinalIgnoreCase))
+						return child;
+				}
+			}
+
+			// 祖先链（向上按钮/后退/面包屑上级）：沿 Parent 指针逐级向上，O(深度)
+			for (var ancestor = current?.Parent; ancestor != null; ancestor = ancestor.Parent)
+			{
+				if (string.Equals(ancestor.FullPath, fullPath, StringComparison.OrdinalIgnoreCase))
+					return ancestor;
+			}
+
+			return FindNodeByPath(fullPath);
 		}
 
 		private void NavigateToArchivePath(string archiveFile, string relative)
@@ -954,51 +1402,55 @@ namespace FastFluentFilesFolders.ViewModels
 				OpenWithDefaultProgram(archiveFile);
 				return;
 			}
-			if (SelectedFolder?.IsStandalone == true)
-				_folderToRelease = SelectedFolder;
+			if (SelectedFolder?.IsStandalone == true && CurrentTab != null)
+				CurrentTab.FolderToRelease = SelectedFolder;
 			var node = FileSystemNodeViewModel.CreateArchiveDirectory(archiveFile, relative, AppConfigs!, _uiDispatcherQueue);
 			node.IsStandalone = true;
-			_previousPath = null;
+			if (CurrentTab != null) CurrentTab.PreviousPath = null;
 			SelectedFolder = node;
 		}
 
 		private void NavigateToNewPath(string path)
 		{
 			if (!Directory.Exists(path)) return;
-			if (SelectedFolder?.IsStandalone == true)
-				_folderToRelease = SelectedFolder;
-			var node = new FileSystemNodeViewModel(path, true, false, _appConfigs, _uiDispatcherQueue, false);
+			if (SelectedFolder?.IsStandalone == true && CurrentTab != null)
+				CurrentTab.FolderToRelease = SelectedFolder;
+			// lazyLoad: true —— 目录枚举统一由 UpdateCurrentFolderContentAsync → LoadChildrenAsync 完成一次，
+			// 避免构造函数里 StartAsyncCount 再全量枚举一遍（面包屑/地址栏/后退进入新路径更跟手）
+			var node = new FileSystemNodeViewModel(path, true, false, _appConfigs, _uiDispatcherQueue, true);
 			node.IsStandalone = true;
-			_previousPath = null;
+			if (CurrentTab != null) CurrentTab.PreviousPath = null;
 			SelectedFolder = node;
 		}
 
 		private void GoBack()
 		{
-			if (_backStack.Count == 0) return;
-			_isNavigatingFromHistory = true;
-			_forwardStack.Add(_previousPath ?? _selectedFolder?.FullPath ?? "");
-			if (_forwardStack.Count > MaxBackDepth) _forwardStack.RemoveAt(0);
-			var path = _backStack[^1]; _backStack.RemoveAt(_backStack.Count - 1);
-			_previousPath = null;
+			var tab = CurrentTab;
+			if (tab == null || tab.BackStack.Count == 0) return;
+			tab.IsNavigatingFromHistory = true;
+			tab.ForwardStack.Add(tab.PreviousPath ?? _selectedFolder?.FullPath ?? "");
+			if (tab.ForwardStack.Count > MaxBackDepth) tab.ForwardStack.RemoveAt(0);
+			var path = tab.BackStack[^1]; tab.BackStack.RemoveAt(tab.BackStack.Count - 1);
+			tab.PreviousPath = null;
 			NavigateToPath(path);
-			CanGoBack = _backStack.Count > 0;
-			CanGoForward = _forwardStack.Count > 0;
-			_isNavigatingFromHistory = false;
+			CanGoBack = tab.BackStack.Count > 0;
+			CanGoForward = tab.ForwardStack.Count > 0;
+			tab.IsNavigatingFromHistory = false;
 		}
 
 		private void GoForward()
 		{
-			if (_forwardStack.Count == 0) return;
-			_isNavigatingFromHistory = true;
-			_backStack.Add(_previousPath ?? _selectedFolder?.FullPath ?? "");
-			if (_backStack.Count > MaxBackDepth) _backStack.RemoveAt(0);
-			var path = _forwardStack[^1]; _forwardStack.RemoveAt(_forwardStack.Count - 1);
-			_previousPath = null;
+			var tab = CurrentTab;
+			if (tab == null || tab.ForwardStack.Count == 0) return;
+			tab.IsNavigatingFromHistory = true;
+			tab.BackStack.Add(tab.PreviousPath ?? _selectedFolder?.FullPath ?? "");
+			if (tab.BackStack.Count > MaxBackDepth) tab.BackStack.RemoveAt(0);
+			var path = tab.ForwardStack[^1]; tab.ForwardStack.RemoveAt(tab.ForwardStack.Count - 1);
+			tab.PreviousPath = null;
 			NavigateToPath(path);
-			CanGoBack = _backStack.Count > 0;
-			CanGoForward = _forwardStack.Count > 0;
-			_isNavigatingFromHistory = false;
+			CanGoBack = tab.BackStack.Count > 0;
+			CanGoForward = tab.ForwardStack.Count > 0;
+			tab.IsNavigatingFromHistory = false;
 		}
 
 		private void GoUp()

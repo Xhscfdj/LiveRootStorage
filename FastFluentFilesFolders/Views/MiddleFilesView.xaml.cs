@@ -1,4 +1,4 @@
-﻿using FastFluentFilesFolders.Extensions;
+using FastFluentFilesFolders.Extensions;
 using FastFluentFilesFolders.Extensions.Interfaces;
 using FastFluentFilesFolders.Helpers;
 using FastFluentFilesFolders.Models;
@@ -47,6 +47,7 @@ namespace FastFluentFilesFolders.Views
             FileGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnFileGridKeyDown), true);
 
             App.SharedViewModel.RenameFocusRequested += OnRenameFocusRequested;
+            App.SharedViewModel.SelectItemRequested += OnSelectItemRequested;
 
             FileOperationReporter.OperationAdded += OnFileOperationReported;
 
@@ -69,6 +70,10 @@ namespace FastFluentFilesFolders.Views
             var cutAccel = new KeyboardAccelerator { Key = VirtualKey.X, Modifiers = VirtualKeyModifiers.Control };
             cutAccel.Invoked += (_, args) => { args.Handled = true; OnCutClick(null, null); };
             FileGrid.KeyboardAccelerators.Add(cutAccel);
+
+            var copyPathAccel = new KeyboardAccelerator { Key = VirtualKey.C, Modifiers = VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift };
+            copyPathAccel.Invoked += (_, args) => { args.Handled = true; OnCopyPathClick(null, null); };
+            FileGrid.KeyboardAccelerators.Add(copyPathAccel);
 
             this.DataContextChanged += (s, e) =>
             {
@@ -95,6 +100,7 @@ namespace FastFluentFilesFolders.Views
         {
             App.ML.PropertyChanged -= OnMLPropertyChanged;
             App.SharedViewModel.RenameFocusRequested -= OnRenameFocusRequested;
+            App.SharedViewModel.SelectItemRequested -= OnSelectItemRequested;
             FileOperationReporter.OperationAdded -= OnFileOperationReported;
             if (_dataContextVm != null)
                 _dataContextVm.PropertyChanged -= OnViewModelPropertyChanged;
@@ -107,7 +113,9 @@ namespace FastFluentFilesFolders.Views
         private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(MainWindowViewModel.CurrentFolderContent) ||
-                e.PropertyName == nameof(MainWindowViewModel.IsCurrentFolderSpecial))
+                e.PropertyName == nameof(MainWindowViewModel.IsCurrentFolderSpecial) ||
+                e.PropertyName == nameof(MainWindowViewModel.IsSearchMode) ||
+                e.PropertyName == nameof(MainWindowViewModel.SearchResults))
             {
                 if (sender is MainWindowViewModel vm)
                     UpdateGroupedSource(vm);
@@ -116,6 +124,14 @@ namespace FastFluentFilesFolders.Views
 
         private void UpdateGroupedSource(MainWindowViewModel vm)
         {
+            if (vm.IsSearchMode)
+            {
+                if (_watchedCollection != null) { _watchedCollection.CollectionChanged -= OnCurrentFolderCollectionChanged; _watchedCollection = null; }
+                _lastAppliedGroupedSource = null;
+                FileGrid.UpdateSource(vm.SearchResults, grouped: false);
+                return;
+            }
+
             var items = vm.CurrentFolderContent ?? new();
             var special = vm.IsCurrentFolderSpecial;
 
@@ -250,7 +266,8 @@ namespace FastFluentFilesFolders.Views
 
             flyout.SecondaryCommands.Add(PlainBtn(ML.CmdOpen,     "\uE8E5", OnOpenClick));
             flyout.SecondaryCommands.Add(PlainBtn(ML.CmdOpenWith, "\uE8E5", OnOpenWithClick));
-            flyout.SecondaryCommands.Add(PlainBtn(ML.CmdCopyPath, "\uE8C8", OnCopyPathClick));
+            flyout.SecondaryCommands.Add(CopyPathThemedBtn(ML.CmdCopyPath, OnCopyPathClick));
+            flyout.SecondaryCommands.Add(PlainBtn(ML.OpenFileLocation, "\uE8B7", OnOpenFileLocationClick));
             flyout.SecondaryCommands.Add(new AppBarSeparator());
             flyout.SecondaryCommands.Add(PlainBtn(ML.CmdProperties, "\uE90F", OnPropertiesClick));
             flyout.SecondaryCommands.Add(new AppBarSeparator());
@@ -525,6 +542,20 @@ namespace FastFluentFilesFolders.Views
             return btn;
         }
 
+        private static AppBarButton CopyPathThemedBtn(string label, RoutedEventHandler? click)
+        {
+            var icon = new ThemedIcon();
+            icon.Style = (Style)Application.Current.Resources["Icon.Copy"];
+            var btn = new AppBarButton
+            {
+                Label = label,
+                Content = new Viewbox { Child = icon, Width = 16, Height = 16 },
+                KeyboardAcceleratorTextOverride = "Ctrl+Shift+C"
+            };
+            if (click != null) btn.Click += click;
+            return btn;
+        }
+
         private static AppBarButton RedBtn(string label, string glyph, RoutedEventHandler? click)
         {
             var btn = new AppBarButton
@@ -716,6 +747,12 @@ namespace FastFluentFilesFolders.Views
             (this.DataContext as MainWindowViewModel)?.RenameCommand.Execute(item);
         }
 
+        private void OnSelectItemRequested(FileSystemNodeViewModel item)
+        {
+            FileGrid.SelectedItem = item;
+            FileGrid.ScrollIntoView(item);
+        }
+
         private void OnRenameFocusRequested(FileSystemNodeViewModel item)
         {
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
@@ -825,6 +862,13 @@ namespace FastFluentFilesFolders.Views
             if (items.Count > 0)
                 (this.DataContext as MainWindowViewModel)?.CopyPathCommand.Execute(items);
         }
+        private void OnOpenFileLocationClick(object sender, RoutedEventArgs e)
+        {
+            _itemContextFlyout?.Hide();
+            var items = GetSelectedItems();
+            if (items.Count > 0)
+                (this.DataContext as MainWindowViewModel)?.OpenFileLocation(items[0]);
+        }
         private void OnPropertiesClick(object sender, RoutedEventArgs e)
         {
             FinishItemOp();
@@ -882,6 +926,14 @@ namespace FastFluentFilesFolders.Views
             if (e.Handled) return;
 
             var isCtrlDown = ((int)Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & 1) != 0;
+            var isShiftDown = ((int)Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & 1) != 0;
+
+            if (isCtrlDown && isShiftDown && e.Key == VirtualKey.C)
+            {
+                e.Handled = true;
+                OnCopyPathClick(sender, e);
+                return;
+            }
 
             if (isCtrlDown && !isAltDown)
             {

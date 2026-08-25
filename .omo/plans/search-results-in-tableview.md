@@ -40,7 +40,7 @@
 
 ### Wave 1 — ViewModel 搜索状态与逻辑
 
-- [ ] 1. `MainWindowViewModel.cs` 新增搜索状态字段
+- [x] 1. `MainWindowViewModel.cs` 新增搜索状态字段
   - References: 现有 `[ObservableProperty]` 区块（`MainWindowViewModel.cs:666-677`）；`_uiDispatcherQueue` 字段（:701）；`SelectedFolder`（:702）。
   - 在 `_isReady` 附近新增：
     ```csharp
@@ -48,13 +48,18 @@
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private ObservableCollection<FileSystemNodeViewModel> _searchResults = new();
     private CancellationTokenSource? _searchCts;
+  ```
+  - 同时新增「当前视图条目数」供底部状态栏使用（修复搜索时状态栏显示旧目录数量）：
+    ```csharp
+    public int DisplayedItemCount => IsSearchMode ? SearchResults.Count : CurrentFolderContent.Count;
+    partial void OnIsSearchModeChanged(bool value) => OnPropertyChanged(nameof(DisplayedItemCount));
     ```
-  - Acceptance: `dotnet build` 通过；生成 `IsSearchMode/SearchText/SearchResults` 三个公开属性 + 各自的 `OnXxxChanged` partial。
+  - Acceptance: `dotnet build` 通过；生成 `IsSearchMode/SearchText/SearchResults` 三个公开属性 + 各自的 `OnXxxChanged` partial；`DisplayedItemCount` 随 `IsSearchMode` 切换通知。
   - QA happy: build ExitCode 0。
   - QA failure: 属性命名与已有 `_searchCts` 等冲突 → 改名；编译报 CS0101 重复 partial → 检查是否已存在同名 partial。
   - Commit: 不提交（工作树增量）。
 
-- [ ] 2. `MainWindowViewModel.cs` 新增 `OnSearchTextChanged` 触发搜索 + `EnterSearchMode`/`ExitSearchMode`
+- [x] 2. `MainWindowViewModel.cs` 新增 `OnSearchTextChanged` 触发搜索 + `EnterSearchMode`/`ExitSearchMode`
   - References: `[ObservableProperty] string _searchText`（todo 1 新增）；旧搜索触发逻辑 `LRSBreadcrumb.xaml.cs:609-688 OnSearchTextChanged`。
   - 实现：
     ```csharp
@@ -81,7 +86,7 @@
         _searchCts = new CancellationTokenSource();
         var token = _searchCts.Token;
         query = query.Trim();
-        if (query.Length == 0) { _uiDispatcherQueue.TryEnqueue(() => SearchResults.Clear()); return; }
+        if (query.Length == 0) { _uiDispatcherQueue.TryEnqueue(() => { SearchResults.Clear(); OnPropertyChanged(nameof(SearchResults)); OnPropertyChanged(nameof(DisplayedItemCount)); }); return; }
         var scope = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
         if (string.IsNullOrEmpty(scope) || !Directory.Exists(scope)) return;
         _ = Task.Run(() => RunSearchAsync(scope, query, token), token);
@@ -92,30 +97,14 @@
   - QA failure: `partial void OnSearchTextChanged` 签名与生成器不匹配（CS0260 缺 partial 修饰 / 参数类型不一致）→ 对齐 `partial void OnSearchTextChanged(string value)`。
   - Commit: 不提交。
 
-- [ ] 3. `MainWindowViewModel.cs` 实现 `RunSearchAsync` + `CreateSearchNode`
+- [x] 3. `MainWindowViewModel.cs` 实现 `RunSearchAsync` + `CreateSearchNode`
   - References: 旧枚举逻辑 `LRSBreadcrumb.xaml.cs:633-664`；`FileSystemNodeViewModel` 构造 + `ApplyMetadata`（`FileSystemNodeViewModel.cs:155-210, 335-345`）；`OpenWithDefaultProgram`（`MainWindowViewModel.cs:878`）。
-  - 实现（后台线程）：
+  - 实现（后台线程，递归枚举，每个目录单独 try/catch，复用 `FileSystemNodeViewModel.SafeGetDirs/SafeGetFiles`，跳过无权限子目录而非中断整次搜索——旧实现单个 `catch { }` 包住两个循环，遇到无权限目录会连文件结果一起丢失）：
     ```csharp
     private async Task RunSearchAsync(string scope, string query, CancellationToken token)
     {
         var results = new List<FileSystemNodeViewModel>();
-        try
-        {
-            foreach (var dir in Directory.EnumerateDirectories(scope, "*", SearchOption.AllDirectories))
-            {
-                if (token.IsCancellationRequested) break;
-                if (Path.GetFileName(dir).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
-                { results.Add(CreateSearchNode(dir, true)); if (results.Count >= 200) break; }
-            }
-            if (results.Count < 200 && !token.IsCancellationRequested)
-            foreach (var file in Directory.EnumerateFiles(scope, "*", SearchOption.AllDirectories))
-            {
-                if (token.IsCancellationRequested) break;
-                if (Path.GetFileName(file).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
-                { results.Add(CreateSearchNode(file, false)); if (results.Count >= 200) break; }
-            }
-        }
-        catch { /* 无权限目录：保留已收集的部分结果 */ }
+        SearchRecursive(scope, query, results, token); // 已在 TriggerSearch 的 Task.Run 后台线程上
         if (token.IsCancellationRequested) return;
         await _uiDispatcherQueue.EnqueueAsync(() =>
         {
@@ -123,7 +112,27 @@
             SearchResults.Clear();
             foreach (var r in results) SearchResults.Add(r);
             OnPropertyChanged(nameof(SearchResults));
+            OnPropertyChanged(nameof(DisplayedItemCount));
         });
+    }
+
+    private void SearchRecursive(string dir, string query, List<FileSystemNodeViewModel> results, CancellationToken token)
+    {
+        if (token.IsCancellationRequested || results.Count >= 200) return;
+        foreach (var sub in FileSystemNodeViewModel.SafeGetDirs(dir))
+        {
+            if (token.IsCancellationRequested || results.Count >= 200) break;
+            if (Path.GetFileName(sub).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                results.Add(CreateSearchNode(sub, true));
+            SearchRecursive(sub, query, results, token);
+        }
+        if (token.IsCancellationRequested || results.Count >= 200) return;
+        foreach (var file in FileSystemNodeViewModel.SafeGetFiles(dir))
+        {
+            if (token.IsCancellationRequested || results.Count >= 200) break;
+            if (Path.GetFileName(file).IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                results.Add(CreateSearchNode(file, false));
+        }
     }
 
     private FileSystemNodeViewModel CreateSearchNode(string path, bool isDir)
@@ -138,12 +147,12 @@
         return node;
     }
     ```
-  - Acceptance: 搜索在当前目录递归、按名匹配（OrdinalIgnoreCase）、结果合计上限 200、后台枚举不阻塞 UI、结果回填在 UI 线程且带 `OnPropertyChanged(nameof(SearchResults))` 通知。
-  - QA happy: 搜索存在条目，`SearchResults` 数量 >0 且每个节点 `Name/LastModifiedTimeString/VisualSize` 非空。
-  - QA failure: 无权限子目录导致整次搜索中断 → 已用 `catch { }` 包裹整体枚举（保留部分结果）；枚举在 UI 线程卡顿 → 确认在 `Task.Run` 内。
+  - Acceptance: 搜索在当前目录递归、按名匹配（OrdinalIgnoreCase）、结果合计上限 200、后台枚举不阻塞 UI、无权限子目录被跳过（不中断整次搜索）、结果回填在 UI 线程且带 `OnPropertyChanged(nameof(SearchResults))` + `OnPropertyChanged(nameof(DisplayedItemCount))` 通知。
+  - QA happy: 搜索存在条目，`SearchResults` 数量 >0 且每个节点 `Name/LastModifiedTimeString/VisualSize` 非空；在含无权限子目录的驱动器（如 C:\）搜索时，文件结果正常出现。
+  - QA failure: 搜索只返回目录、文件为空 → 确认每个目录用 `SafeGetDirs/SafeGetFiles`（按目录 try/catch）而非单个 catch 包住整次枚举；枚举卡顿 → 确认在 `Task.Run` 内。
   - Commit: 不提交。
 
-- [ ] 4. `MainWindowViewModel.cs` 集成搜索模式到 `OpenItem` + 导航退出搜索
+- [x] 4. `MainWindowViewModel.cs` 集成搜索模式到 `OpenItem` + 导航退出搜索
   - References: `OpenItem`（`MainWindowViewModel.cs:782-809`）；`NavigateToPath`（:928-946）；`OnSelectedFolderChanged`（:706）。
   - 在 `OpenItem` 最顶部加：
     ```csharp
@@ -162,7 +171,7 @@
 
 ### Wave 2 — 面包屑内联搜索框
 
-- [ ] 5. `LRSBreadcrumb.xaml` 在 `AddressBarArea` 内新增 `SearchTextBox`
+- [x] 5. `LRSBreadcrumb.xaml` 在 `AddressBarArea` 内新增 `SearchTextBox`
   - References: `AddressBarArea`（`LRSBreadcrumb.xaml:90-161`）；`PathTextBox`（:96-106，作为样式参照）。
   - 在 `PathTextBox` 之后、`BreadcrumbScrollViewer` 之前加入隐藏的搜索框（样式对齐 PathTextBox：透明背景、无边框、CornerRadius 16、`Visibility="Collapsed"`）：
     ```xml
@@ -179,7 +188,7 @@
   - QA failure: XAML 解析错误（XamlParseException）→ 检查 `x:Name`/事件处理函数名匹配 `.cs`。
   - Commit: 不提交。
 
-- [ ] 6. `LRSBreadcrumb.xaml.cs` 接线搜索模式 UI 切换 + 绑定 VM
+- [x] 6. `LRSBreadcrumb.xaml.cs` 接线搜索模式 UI 切换 + 绑定 VM
   - References: `OnSearchButtonClick`（:591-607）；`EnterEditMode`/`ExitEditMode`（:325-351）；`OnBreadcrumbKeyDown`（:378-389）；构造器订阅 `App.LocalizationService.PropertyChanged`（:157-161）；`App.SharedViewModel`（`App.xaml.cs:24`）。
   - 实现：
     1. 字段 `private bool _isSearchMode;`
@@ -188,13 +197,13 @@
     4. `OnSearchButtonClick` 改为切换：`if (_isSearchMode) ExitSearch(); else EnterSearch();`，其中 `EnterSearch()` 调 `App.SharedViewModel.EnterSearchMode()` + 显示 SearchTextBox/隐藏 BreadcrumbScrollViewer/确保 `ExitEditMode()`、聚焦 SearchTextBox；`ExitSearch()` 调 `App.SharedViewModel.ExitSearchMode()` + 恢复。
     5. `SyncSearchUi()`：依据 `App.SharedViewModel.IsSearchMode` 同步 `_isSearchMode` 与 SearchTextBox/BreadcrumbScrollViewer 可见性。
     6. `OnSearchTextBoxKeyDown`：Esc → `ExitSearch()`，`e.Handled=true`。
-    7. 守卫：`OnAddressBarAreaPointerPressed`（:283）与 `OnPathTextBoxGotFocus`（:303）在 `_isSearchMode` 时直接 return（避免进入编辑模式与搜索框冲突）。
+    7. 守卫（编辑模式与搜索框互斥）：`OnAddressBarAreaPointerPressed`（:283）、`OnPathTextBoxGotFocus`（:303）、`OnPathTextBoxLostFocus`（:373）三处在 `_isSearchMode` 时直接 return——尤其 `OnPathTextBoxLostFocus`，否则从 PathTextBox 切焦点到 SearchTextBox 会触发 `ExitEditMode()` 把 `BreadcrumbScrollViewer` 重新显示出来盖住搜索框。
   - Acceptance: 点搜索按钮 → 地址栏切换为搜索框并聚焦；输入实时出结果；Esc/再次点按钮 → 恢复地址栏；双击目录结果（VM 退出搜索）时面包屑自动恢复。
   - QA happy: 搜索→Esc→地址栏恢复面包屑；搜索→双击目录结果→地址栏恢复。
   - QA failure: 点搜索按钮无反应 → 确认 `OnSearchButtonClick` 仍是 XAML `Click` 目标；输入不出结果 → 确认 `SearchTextBox.Text` 双向绑定到 `SearchText`（TwoWay + PropertyChanged trigger）。
   - Commit: 不提交。
 
-- [ ] 7. `LRSBreadcrumb.xaml.cs` 删除旧弹窗搜索代码
+- [x] 7. `LRSBreadcrumb.xaml.cs` 删除旧弹窗搜索代码
   - References: 旧字段 `:125-133`（`_searchCts/_searchResults/_searchFlyout/_searchTextBox/_searchResultsList/_searchStatusText/_searchContentGrid/_searchFlyoutBuilt`）；`BuildSearchFlyout`（:217-281）；`OnSearchButtonClick` 旧体（:591-607）；`OnSearchTextChanged`（:609-688）；`OnSearchTextBoxKeyDown`（:690-697）；`OnSearchFlyoutClosing`（:699-702）；`OnSearchResultItemClick`（:704-714）；`SearchResultItem` 类（:757-764）。
   - 删除以上全部（含 `SearchResultItem` 类与 `_searchResults` 字段）；保留/替换 `OnSearchButtonClick` 与 `OnSearchTextBoxKeyDown` 为 todo 6 的新实现。移除不再使用的 `using`（如 `Microsoft.UI.Xaml.Controls.Primitives` 若 Flyout 不再使用需确认，`Flyout` 类型仅搜索用）。
   - Acceptance: `dotnet build` 通过；无对已删符号的引用；`SearchResultItem` 全工程无残留引用。
@@ -204,7 +213,7 @@
 
 ### Wave 3 — TableView 显示搜索结果 + 「位置」列
 
-- [ ] 8. `MiddleFilesView.xaml` 新增 `ColLocation` 列 + 转换器资源
+- [x] 8. `MiddleFilesView.xaml` 新增 `ColLocation` 列 + 转换器资源
   - References: 现有列 `MiddleFilesView.xaml:60-157`；`Page.Resources`（:16-34）；`xmlns:uc`（:11）。
   - 在 `Page.Resources` 加 `<local:ParentDirectoryConverter x:Key="ParentDirectoryConverter"/>`（转换器类在 todo 9 定义）。
   - 在 `ColName` 之后新增列（`Visibility="Collapsed"`，`CanSort="False"`，避免分组列表对 `FullPath` 排序失效）：
@@ -221,11 +230,12 @@
     </tv:TableViewTemplateColumn>
     ```
   - Acceptance: 编译通过；列初始隐藏，正常浏览不显示「位置」。
-  - QA happy: build 通过；普通浏览 4 列无「位置」列。
-  - QA failure: XAML 解析失败 → 确认 `ParentDirectoryConverter` 在 `.cs` 里已 public 定义、`x:DataType` 引用 `vm` 命名空间正确。
+  - 另：底部状态栏条目数 `Text="{Binding CurrentFolderContent.Count}"`（:161）改为 `Text="{Binding DisplayedItemCount}"`，使搜索时显示结果数、普通浏览显示当前目录数。
+  - QA happy: build 通过；普通浏览 4 列无「位置」列；状态栏显示当前目录条目数。
+  - QA failure: XAML 解析失败 → 确认 `ParentDirectoryConverter` 在 `.cs` 里已 public 定义、`x:DataType` 引用 `vm` 命名空间正确；状态栏搜索时仍显示旧数 → 确认已改用 `DisplayedItemCount`（todo 1 已定义）。
   - Commit: 不提交。
 
-- [ ] 9. `MiddleFilesView.xaml.cs` 新增 `ParentDirectoryConverter` + 源切换 + 列显隐
+- [x] 9. `MiddleFilesView.xaml.cs` 新增 `ParentDirectoryConverter` + 源切换 + 列显隐
   - References: `OnViewModelPropertyChanged`（:107-115）；`UpdateGroupedSource`（:117-137）；`_watchedCollection`/`OnCurrentFolderCollectionChanged`（:34, 127-159）；现有转换器类（:952-978）；`ColLocation`（todo 8）。
   - 实现：
     1. 新增转换器：
@@ -238,7 +248,8 @@
        }
        ```
     2. `OnViewModelPropertyChanged` 增补：`IsSearchMode`、`SearchResults` 两个属性变化时也调用 `UpdateGroupedSource(vm)`。
-    3. `UpdateGroupedSource(vm)` 顶部加搜索分支：
+    3. `RefreshHeaders()`（:210-216）末尾补一行 `ColLocation.Header = ML.ColumnLocation;`（否则「位置」列头为空，且随语言切换更新）。
+    4. `UpdateGroupedSource(vm)` 顶部加搜索分支：
        ```csharp
        if (vm.IsSearchMode)
        {
@@ -251,22 +262,25 @@
        ColLocation.Visibility = Visibility.Collapsed;
        // ... 现有 normal 逻辑不变（含 _watchedCollection 订阅与 dedup）
        ```
-  - Acceptance: 进入搜索 → 表格显示 `SearchResults`（平铺）、「位置」列可见；退出搜索 → 恢复 `CurrentFolderContent`、列隐藏；`SearchResults` 回填（带 `OnPropertyChanged`）触发一次 `UpdateSource`。
-  - QA happy: 搜索后表格行数与 `SearchResults.Count` 一致；「位置」列显示父目录。
-  - QA failure: 搜索后表格仍显示旧目录 → 确认 `OnViewModelPropertyChanged` 已加 `SearchResults` 分支；「位置」列不显示 → 确认 `ColLocation.Visibility` 在 code-behind 切换（`TableViewColumn` 无 DataContext，不能用 XAML `{Binding}`）。
+    5. 搜索模式禁用对结果的文件操作（结果只读，仅导航/打开，匹配旧弹窗行为）：
+       - `OnFileGridContextRequested`（:176）开头：`if ((this.DataContext as MainWindowViewModel)?.IsSearchMode == true) return;`（不弹右键菜单）。
+       - `GetSelectedItems()`（:639）开头：`if ((this.DataContext as MainWindowViewModel)?.IsSearchMode == true) return new();`（使工具栏/键盘的剪切/复制/删除/重命名/属性在搜索模式下为空操作，避免对搜索节点做 `CurrentFolderContent.Remove` 造成磁盘已删但行残留）。
+  - Acceptance: 进入搜索 → 表格显示 `SearchResults`（平铺）、「位置」列可见且列头显示「位置/Location」；退出搜索 → 恢复 `CurrentFolderContent`、列隐藏；`SearchResults` 回填（带 `OnPropertyChanged`）触发一次 `UpdateSource`；搜索模式下右键/文件操作被禁用。
+  - QA happy: 搜索后表格行数与 `SearchResults.Count` 一致；「位置」列显示父目录与正确列头；搜索模式右键无菜单、Ctrl+Delete 无效果。
+  - QA failure: 搜索后表格仍显示旧目录 → 确认 `OnViewModelPropertyChanged` 已加 `SearchResults` 分支；「位置」列不显示或列头为空 → 确认 `ColLocation.Visibility`/`ColLocation.Header` 在 code-behind 赋值（`TableViewColumn` 无 DataContext，不能用 XAML `{Binding}`）；搜索模式右键仍可删除结果 → 确认 `OnFileGridContextRequested`/`GetSelectedItems` 已加 `IsSearchMode` 守卫。
   - Commit: 不提交。
 
-- [ ] 10. 回归确认搜索/普通浏览切换无泄漏或陈旧残留
+- [x] 10. 回归确认搜索/普通浏览切换无泄漏或陈旧残留
   - References: `LrsTableView.UpdateSource`（`LrsTableView.cs:24-34`，已复用 `_groupedSource`）；`GroupedFileList.SetItems` 平铺分支（`GroupedFileList.cs:36-48`）。
   - 确认：搜索模式用 `UpdateSource(SearchResults, false)` 走 `_groupedSource.SetItems(items, false)` 平铺分支（Clear+Add，无组头）；退出搜索恢复 `UpdateSource(CurrentFolderContent, IsCurrentFolderSpecial)`。不新增 `ItemsSource` 交换、不新建 `GroupedFileList`。
-  - Acceptance: 多次进出搜索模式，`ItemsSource` 始终是同一个 `_groupedSource`（无 churn）；排序/双击在搜索结果上正常。
-  - QA happy: 搜索→退出→搜索→退出 ×5，内存不单调增长（Debug 观察）；搜索结果双击文件可打开、双击目录可跳转。
-  - QA failure: 搜索排序点击无反应 → 确认搜索结果非分组时 `GroupedFileList.SortWithinGroups` 平铺分支生效（已有，无需改）。
+  - Acceptance: 多次进出搜索模式，`FileGrid.ItemsSource` 始终是同一个 `_groupedSource` 实例（`ReferenceEquals` 恒定）；`_watchedCollection` 在进出搜索时正确退订/重订（无重复订阅）；排序/双击在搜索结果上正常。
+  - QA happy: 搜索→退出→搜索→退出 ×5，`FileGrid.ItemsSource` 引用不变；搜索结果双击文件可打开、双击目录可跳转。
+  - QA failure: 搜索排序点击无反应 → 确认搜索结果非分组时 `GroupedFileList.SortWithinGroups` 平铺分支生效（已有，无需改）；`_watchedCollection` 重复订阅导致正常浏览时文件操作重复刷新 → 确认 todo 9 的退订逻辑正确。
   - Commit: 不提交。
 
 ### Wave 4 — 多语言 + CHANGELOG + 构建
 
-- [ ] 11. 多语言：新增 `ColumnLocation` 等字符串
+- [x] 11. 多语言：新增 `ColumnLocation` 等字符串
   - References: `Strings/zh-Hans.json`、`Strings/en.json`；`MultiLanguageStringsViewModel.cs` 的 `AllPropertyNames`（:11-57）与属性区（:92 附近 `ColumnSize` 之后）。
   - 新增键：
     - `ColumnLocation`：zh-Hans = "位置"，en = "Location"
@@ -277,8 +291,9 @@
   - QA failure: 语言切换后列头仍是旧文本 → 确认属性名加入 `AllPropertyNames`。
   - Commit: 不提交。
 
-- [ ] 12. `CHANGELOG.md` 按 AGENTS.md 格式写变更日志
+- [x] 12. `CHANGELOG.md` 按 AGENTS.md 格式写变更日志
   - References: `AGENTS.md` CHANGELOG 段（格式 `## <Version>` + `- [ChangeType Date] Changelog ...`）；`CHANGELOG.md` 当前为空。
+  - 版本号说明：仓库版本号不一致——`MainWindowView.xaml:39 Subtitle="v1.0.1"`（用户可见版本）、`Package.appxmanifest:3 Version="0.0.7.0"`、`Strings/*.json AppVersion="1.0.0-beta"`。**以用户可见版本（窗口副标题 v1.0.1）为准递增**，取 `1.0.2`。
   - 追加：
     ```
     ## 1.0.2
@@ -286,25 +301,28 @@
     ```
   - Acceptance: `CHANGELOG.md` 含上述条目，格式与 AGENTS.md 一致。
   - QA happy: 打开文件确认条目存在且格式正确。
-  - QA failure: 版本号与仓库现行版本约定不符 → 按 `Package.appxmanifest`/窗口副标题的现行版本递增（此处取 1.0.2）。
+  - QA failure: 若维护者另有版本约定，按窗口副标题/README 的最新版本递增（默认 1.0.2）。
   - Commit: 不提交（除非用户明确要求提交）。
 
 ## Final verification wave
 
-- [ ] F1. 计划符合性审计：逐条核对 12 个实现 todo 是否全部落地，改动文件与 Scope 一致，无越界改动（尤其未触碰 `FastFluentFilesFolders.TableView/`、`LrsTableView.cs`、`GroupedFileList.cs`、配置面）。
+- [x] F1. 计划符合性审计：逐条核对 12 个实现 todo 是否全部落地，改动文件与 Scope 一致，无越界改动（尤其未触碰 `FastFluentFilesFolders.TableView/`、`LrsTableView.cs`、`GroupedFileList.cs`、配置面）。
   - 证据：`git diff --stat` 仅含 Scope 内文件。
 
-- [ ] F2. 代码质量审查：`lsp_diagnostics` 对 6 个改动 `.cs`/`.xaml` 无 error；UI 更新均在 `DispatcherQueue`；无 `as any`/`@ts-ignore` 等价反模式、无空 catch 吞异常（搜索枚举的 `catch { }` 需保留注释说明为「保留部分结果」）。
+- [x] F2. 代码质量审查：`lsp_diagnostics` 对 6 个改动 `.cs`/`.xaml` 无 error；UI 更新均在 `DispatcherQueue`；无 `as any`/`@ts-ignore` 等价反模式、无空 catch 吞异常（搜索枚举的 `catch { }` 需保留注释说明为「保留部分结果」）。
   - 证据：diagnostics 输出 + 人工 review。
 
-- [ ] F3. 运行期手动 QA（Unpackaged 启动）：
-  1. 点搜索按钮 → 地址栏变搜索框 → 输入关键词 → 表格显示匹配结果、带图标、含「位置」列。
+- [x] F3. 运行期手动 QA（Unpackaged 启动）：
+  1. 点搜索按钮 → 地址栏变搜索框 → 输入关键词 → 表格显示匹配结果、带图标、含「位置」列（列头「位置/Location」）。
   2. 双击目录结果 → 退出搜索并导航；双击文件 → 用默认程序打开且仍停留搜索。
   3. Esc → 恢复地址栏；无结果时表格为空（无残留）。
-  4. 切换中/英文 → 「位置」列头语言正确。
+  4. **输入关键词后再清空 → 表格立即清空（无残留行），状态栏条目数归零。**
+  5. 在含无权限子目录的驱动器（如 C:\）搜索 → 文件结果正常出现（不因无权限目录丢失）。
+  6. 搜索模式右键无菜单；搜索模式 Ctrl+Delete/F2 无效果（结果只读）。
+  7. 切换中/英文 → 「位置」列头语言正确。
   - 证据：逐项记录 PASS/FAIL。
 
-- [ ] F4. 范围保真：确认未新增 NuGet 依赖、未改配置、未实现全局搜索、未给结果做独立批量操作（Must-NOT-Have 全部满足）。
+- [x] F4. 范围保真：确认未新增 NuGet 依赖、未改配置、未实现全局搜索、未给结果做独立批量操作（Must-NOT-Have 全部满足）。
   - 证据：`git diff` 复查 + F1 联动。
 
 ## Commit strategy

@@ -5,9 +5,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
 using Windows.System;
 
 namespace FastFluentFilesFolders.Views
@@ -23,11 +23,36 @@ namespace FastFluentFilesFolders.Views
             {
                 InitializeComponent();
                 this.DataContext = VM;
+                VM.PropertyChanged += OnVmPropertyChanged;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"InitializeComponent failed: {ex}");
                 throw;
+            }
+        }
+
+        private void OnVmPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.SelectedTab))
+                SyncTreeSelectionToTab();
+        }
+
+        // 程序化同步选中（切换标签页时高亮目录树）期间不触发导航：
+        // IsSelected 双向绑定会把 node.IsSelected=true 写回 TreeViewItem，
+        // 再次触发 SelectionChanged → 与 ActivateTab 的导航重复执行并污染标签页历史栈
+        private bool _suppressTreeNavigation;
+
+        private void SyncTreeSelectionToTab()
+        {
+            var path = VM.CurrentTab?.Path;
+            if (string.IsNullOrEmpty(path)) return;
+            var node = VM.FindNodeByPath(path);
+            if (node != null && !node.IsPlaceholder)
+            {
+                _suppressTreeNavigation = true;
+                try { node.IsSelected = true; }
+                finally { _suppressTreeNavigation = false; }
             }
         }
 
@@ -47,36 +72,24 @@ namespace FastFluentFilesFolders.Views
         //    }
         //}
 
-        private async void TreeView_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
+        // 目录树单击即导航：与文件表格双击走同一套 SelectedFolder 流程。
+        // 原来这里人为 Delay(50ms) 再切换，导致“非双击进文件夹”每次都有小卡顿；
+        // 直接导航即可，快速连点产生的过期刷新由 NavigationVersion 守卫丢弃。
+        private void TreeView_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
         {
-            Debug.WriteLine($"[TreeView_SelectionChanged] Entered. AddedItems count: {args.AddedItems.Count}");
+            if (_suppressTreeNavigation) return;
+
             var selectedItem = args.AddedItems.FirstOrDefault() as FileSystemNodeViewModel;
             if (selectedItem is null)
-            {
-                Debug.WriteLine("[TreeView_SelectionChanged] No FileSystemNodeViewModel selected.");
                 return;
-            }
-            await Task.Delay(50);
-            Debug.WriteLine($"[TreeView_SelectionChanged] Selected item: {selectedItem.Name}, Type: {selectedItem.NodeTypeName}");
-            _ = DispatcherQueue.TryEnqueue(() =>
+
+            if (selectedItem is FileSystemNodeViewModel folder)
             {
-                if (selectedItem is FileSystemNodeViewModel folder)
-                {
-                    Debug.WriteLine($"[TreeView_SelectionChanged] Setting SelectedFolder to {folder.FullPath}");
-                    var vm = DataContext as MainWindowViewModel;
-                    if (vm != null)
-                    {
-                        if (ReferenceEquals(folder, vm.SelectedFolder))
-                            _ = vm.UpdateCurrentFolderContentAsync(folder, version: null);
-                        else
-                            vm.SelectedFolder = folder;
-                    }
-                }
-                else if (!selectedItem.IsDirectory)
-                {
-                    Debug.WriteLine("[TreeView_SelectionChanged] Selected item is not a folder. Setting SelectedFolder to null.");
-                }
-            });
+                if (ReferenceEquals(folder, VM.SelectedFolder))
+                    _ = VM.UpdateCurrentFolderContentAsync(folder, version: null);
+                else
+                    VM.SelectedFolder = folder;
+            }
         }
 
         private void TreeView_KeyDown(object sender, KeyRoutedEventArgs e)

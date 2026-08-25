@@ -30,7 +30,13 @@ namespace FastFluentFilesFolders.UserControls
                 source.FlatListChanged += OnFlatListChanged;
                 ItemsSource = source;
             }
+
+            // 整表替换：先断开 ItemsSource（视图清空、无订阅者），再填充（零事件开销），
+            // 最后接回触发一次整表刷新。避免旧实现“Clear + 逐条 Add → N 次 VectorChanged
+            // → 先清空再逐条插入”造成的替换感与分组模式 O(N²) 插入。
+            ItemsSource = null;
             _groupedSource.SetItems(items, grouped);
+            ItemsSource = _groupedSource;
         }
 
         public void SortBy(string sortPath, bool ascending)

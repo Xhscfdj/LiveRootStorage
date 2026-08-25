@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="FastFluentFilesFolders.Views.SettingsView"
     x:Name="SV"
@@ -83,7 +83,7 @@
 						<FontIcon Glyph="&#xE8B9;"/>
 					</ccl:SettingsCard.HeaderIcon>
 					<ctrls:NumberBox Value="{Binding AppConfigs.IconParallelLoadingCount, Mode=TwoWay}"
-									 Minimum="1" Maximum="200"
+									 Minimum="0" Maximum="200"
 									 SpinButtonPlacementMode="Inline" />
 				</ccl:SettingsCard>
 

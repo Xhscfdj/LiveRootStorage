@@ -2,6 +2,7 @@ using FastFluentFilesFolders.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 
 namespace FastFluentFilesFolders.UserControls
@@ -9,6 +10,8 @@ namespace FastFluentFilesFolders.UserControls
     public sealed partial class FileOperationsButton : UserControl
     {
         private ObservableCollection<FileOperationItem>? _items;
+        private FileOperationItem? _latestItem;
+        private const string DefaultIconGlyph = "\uE8B7";
 
         public FileOperationsButton()
         {
@@ -21,8 +24,44 @@ namespace FastFluentFilesFolders.UserControls
         {
             _items = items;
             OpsList.ItemsSource = items;
-            items.CollectionChanged += (_, _) => UpdateCount();
+            items.CollectionChanged += OnItemsChanged;
             UpdateCount();
+            UpdateLatestItem();
+        }
+
+        private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            UpdateCount();
+            UpdateLatestItem();
+        }
+
+        private void UpdateLatestItem()
+        {
+            var latest = _items != null && _items.Count > 0 ? _items[0] : null;
+            if (ReferenceEquals(latest, _latestItem))
+            {
+                RefreshIslandIcon();
+                return;
+            }
+
+            if (_latestItem != null)
+                _latestItem.PropertyChanged -= OnItemPropertyChanged;
+            _latestItem = latest;
+            if (_latestItem != null)
+                _latestItem.PropertyChanged += OnItemPropertyChanged;
+            RefreshIslandIcon();
+        }
+
+        private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(FileOperationItem.State) ||
+                e.PropertyName == nameof(FileOperationItem.IconGlyph))
+                RefreshIslandIcon();
+        }
+
+        private void RefreshIslandIcon()
+        {
+            IslandIcon.Glyph = _latestItem?.DisplayIconGlyph ?? DefaultIconGlyph;
         }
 
         private void UpdateCount()

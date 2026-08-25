@@ -13,13 +13,69 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-//using System.Threading;
 using System.Threading.Tasks;
 
 namespace FastFluentFilesFolders.ViewModels
 {
 	public partial class FileSystemNodeViewModel : ViewModelBase
 	{
+		// 构造函数（统一入口）
+		public FileSystemNodeViewModel(
+			string fullPath,
+			bool isDirectory,
+			bool isPlaceholder,
+			Configs configs,
+			DispatcherQueue uiDispatcherQueue,
+			bool lazyLoad)
+			: base()
+		{
+			IsPlaceholder = isPlaceholder;
+			_isLazyLoad = lazyLoad;
+			_uiDispatcherQueue = uiDispatcherQueue;
+			if (configs != null)
+			{
+				_configs = configs;
+			}
+			FullPath = fullPath;
+			IsDirectory = isDirectory;
+			// 设置名称和扩展名
+			if (isDirectory && !IsPlaceholder)
+			{
+				// 对于驱动器根目录，名称为 "C:\" 形式
+				Children.Add(new PlaceholderNodeViewModel());
+				Name = (fullPath.Length == 3 && fullPath.EndsWith(":\\")) ? fullPath : Path.GetFileName(fullPath.TrimEnd('\\'));
+				Extension = string.Empty;
+				IsSpecialFolder = ShellIconHelper.IsSpecialFolder(fullPath);
+				if (_configs != null && _configs.IsTimeGroupedFolder(fullPath))
+				{
+					WillSplitToDifferentSorts = true;
+				}
+			}
+			else
+			{
+				Name = Path.GetFileName(fullPath);
+				Extension = Path.GetExtension(fullPath);
+			}
+
+			if (!_isLazyLoad)
+			{
+				_ = LoadBasicInfoAsync();
+				if (configs != null)
+				{
+					_ = LoadIconAsync(fullPath, isDirectory);
+				}
+
+				if (isDirectory)
+				{
+					_ = StartAsyncCount();
+				}
+			}
+
+			if (!isDirectory)
+			{
+				_isLoaded = true;
+			}
+		}
 		private readonly Configs _configs;
 		private readonly DispatcherQueue _uiDispatcherQueue;
 		private bool _isLoaded;
@@ -28,12 +84,130 @@ namespace FastFluentFilesFolders.ViewModels
 		private bool _isLazyLoad;
 		private bool _hasBasicInfo;
 		public bool IsStandalone { get; set; }
+		// 父节点引用（目录树节点加载子项时回填），用于 O(深度) 的祖先快速查找
+		public FileSystemNodeViewModel? Parent { get; set; }
 
-		// 限制“缓存未命中”时的图标解码并发，防止阻塞式 Shell 调用耗尽线程池而卡顿
-		private static readonly System.Threading.SemaphoreSlim _iconLoadGate =
+		// 限制“缓存未命中”时的图标解码并发，防止阻塞式 Shell 调用耗尽线程池而卡顿。
+		// 并发上限在启动时由 Configs.IconParallelLoadingCount 注入（默认 30）；
+		// 尚未注入前先用处理器数的一半作为保守默认值。
+		private static System.Threading.SemaphoreSlim _iconLoadGate =
 			new(Math.Max(2, Environment.ProcessorCount / 2), Math.Max(2, Environment.ProcessorCount / 2));
 
+		/// <summary>
+		/// 在启动早期注入图标解码并发上限。之后新发起的 LoadIconAsync 调用会使用新上限。
+		/// concurrency &lt;= 0 表示“自动”：使用安全上限 16——SHGetFileInfo/GDI+ 解码
+		/// 并发过高会偶发失败导致图标缺失（尤其固定栏这类只实体化一次的行）；
+		/// &gt;0 时按配置限流（上限 64，防止配置误填过大）。
+		/// </summary>
+		public static void ConfigureIconLoadConcurrency(int concurrency)
+		{
+			if (concurrency <= 0)
+				_iconLoadGate = new System.Threading.SemaphoreSlim(16, 16);
+			else
+			{
+				var cap = Math.Min(concurrency, 64);
+				_iconLoadGate = new System.Threading.SemaphoreSlim(cap, cap);
+			}
+		}
+
+		// 图标加载失败自动重试（有界）：并发高峰下 SHGetFileInfo/GDI+ 会偶发失败，
+		// 对固定栏这类“只实体化一次、不会因滚动重读 Icon”的行，必须主动重试
+		// 才能让图标出现（成功后经属性通知刷新已实体化的行）。
+		private const int MaxIconRetries = 3;
+		private const int IconRetryBaseDelayMs = 500;
+		private int _iconRetryCount;
+
+		// 图标加载请求批量合并：行实体化瞬间会有几十个 Icon getter 触发，
+		// 全部收进同一批、一个调度周期统一发起加载，避免与赋值排空交错造成逐批弹出。
+		private static readonly object _iconLoadRequestLock = new();
+		private static readonly List<FileSystemNodeViewModel> _iconLoadRequests = new();
+		private static bool _iconLoadRequestScheduled;
+
+		private static void RequestIconLoad(FileSystemNodeViewModel node)
+		{
+			var queue = node._uiDispatcherQueue;
+			if (queue == null) return;
+
+			lock (_iconLoadRequestLock)
+			{
+				_iconLoadRequests.Add(node);
+				if (_iconLoadRequestScheduled) return;
+				_iconLoadRequestScheduled = true;
+			}
+			queue.TryEnqueue(ProcessIconLoadRequests);
+		}
+
+		private static void ProcessIconLoadRequests()
+		{
+			FileSystemNodeViewModel[] batch;
+			lock (_iconLoadRequestLock)
+			{
+				if (_iconLoadRequests.Count == 0)
+				{
+					_iconLoadRequestScheduled = false;
+					return;
+				}
+				batch = _iconLoadRequests.ToArray();
+				_iconLoadRequests.Clear();
+				_iconLoadRequestScheduled = false;
+			}
+
+			foreach (var node in batch)
+				_ = node.LoadIconAsync(node.FullPath, node.IsDirectory);
+		}
+
+		// 批量图标赋值：图标在后台完成的时间不同，若每个完成都立即在 UI 线程单独赋值，
+		// 图标会跨多个帧逐行出现（“从顶部一行行替换”）。改为先收集到队列，
+		// 再在每个 UI 调度周期统一应用一次，视觉上快速成批铺满。
+		private static readonly object _iconAssignLock = new();
+		private static readonly List<(FileSystemNodeViewModel Node, ImageSource Icon)> _iconAssignPending = new();
+		private static bool _iconAssignScheduled;
+
+		private static void QueueIconAssign(FileSystemNodeViewModel node, ImageSource icon)
+		{
+			var queue = node._uiDispatcherQueue;
+			if (queue == null) return;
+
+			lock (_iconAssignLock)
+			{
+				_iconAssignPending.Add((node, icon));
+				if (_iconAssignScheduled) return;
+				_iconAssignScheduled = true;
+			}
+			queue.TryEnqueue(FlushIconAssigns);
+		}
+
+		private static void FlushIconAssigns()
+		{
+			(FileSystemNodeViewModel Node, ImageSource Icon)[] batch;
+			lock (_iconAssignLock)
+			{
+				if (_iconAssignPending.Count == 0)
+				{
+					_iconAssignScheduled = false;
+					return;
+				}
+				batch = _iconAssignPending.ToArray();
+				_iconAssignPending.Clear();
+				_iconAssignScheduled = false;
+			}
+
+			foreach (var (node, icon) in batch)
+			{
+				try
+				{
+					node.Icon = icon;
+				}
+				catch (Exception ex)
+				{
+					// 单个节点赋值异常不应拖垮整批图标
+					Debug.WriteLine($"[IconAssign] Failed for {node.FullPath}: {ex.Message}");
+				}
+			}
+		}
+
 		// 基础属性
+		[ObservableProperty] private TagViewModel _tag = new();
 		[ObservableProperty] private bool _isPlaceholder = false;
 		[ObservableProperty] private bool _isSpecialFolder = false;
 		[ObservableProperty] private bool _willSplitToDifferentSorts = false;
@@ -52,7 +226,10 @@ namespace FastFluentFilesFolders.ViewModels
 				if (!_iconRequested && !IsPlaceholder && App.SharedIconProvider != null && _uiDispatcherQueue != null)
 				{
 					_iconRequested = true;
-					_uiDispatcherQueue.TryEnqueue(() => _ = LoadIconAsync(FullPath, IsDirectory));
+					// 批量请求：行实体化瞬间会有一批 getter 触发，若逐行入队，
+					// 每个 LoadIconAsync 与赋值排空交错执行，图标会分多批“滚”进来。
+					// 收集到同一调度周期统一处理，缓存命中时一次性铺满。
+					RequestIconLoad(this);
 				}
 				return _icon;
 			}
@@ -151,65 +328,20 @@ namespace FastFluentFilesFolders.ViewModels
 
 		public bool IsLoaded => _isLoaded;
 
-		// 构造函数（统一入口）
-		public FileSystemNodeViewModel(
-			string fullPath,
-			bool isDirectory,
-			bool isPlaceholder,
-			Configs configs,
-			DispatcherQueue uiDispatcherQueue,
-			bool lazyLoad)
-			: base()
+		/// <summary>
+		/// 释放子项缓存（内存优化）。同时把加载状态重置为未加载，
+		/// 保证之后再次导航回该文件夹时会重新枚举磁盘，
+		/// 否则会出现“返回后文件夹为空、刷新才恢复”的问题。
+		/// </summary>
+		public void ReleaseChildren()
 		{
-			IsPlaceholder = isPlaceholder;
-			_isLazyLoad = lazyLoad;
-			_uiDispatcherQueue = uiDispatcherQueue;
-			if (configs != null)
-			{
-				_configs = configs;
-			}
-			FullPath = fullPath;
-			IsDirectory = isDirectory;
-			// 设置名称和扩展名
-			if (isDirectory && !IsPlaceholder)
-			{
-				// 对于驱动器根目录，名称为 "C:\" 形式
-				Children.Add(new PlaceholderNodeViewModel());
-				Name = (fullPath.Length == 3 && fullPath.EndsWith(":\\")) ? fullPath : Path.GetFileName(fullPath.TrimEnd('\\'));
-				Extension = string.Empty;
-				IsSpecialFolder = ShellIconHelper.IsSpecialFolder(fullPath);
-				if (_configs != null && _configs.IsTimeGroupedFolder(fullPath))
-				{
-					WillSplitToDifferentSorts = true;
-				}
-			}
-			else
-			{
-				Name = Path.GetFileName(fullPath);
-				Extension = Path.GetExtension(fullPath);
-			}
-
-		    if (!_isLazyLoad)
-			{
-				_ = LoadBasicInfoAsync();
-				if (configs != null)
-				{
-					_ = LoadIconAsync(fullPath, isDirectory);
-				}
-
-				if (isDirectory)
-				{
-					_ = StartAsyncCount();
-				}
-			}
-
-			if (!isDirectory)
-			{
-				_isLoaded = true;
-			}
+			Children.Clear();
+			_isLoaded = false;
+			_cachedChildrenCount = null;
+			ChildrenCountText = string.Empty;
 		}
 
-		// 创建压缩包根节点（把压缩包当作一个可进入的“文件夹”）
+		// 创建压缩包根节点
 		public static FileSystemNodeViewModel CreateArchiveRoot(
 			string archiveFilePath,
 			Configs configs,
@@ -259,6 +391,7 @@ namespace FastFluentFilesFolders.ViewModels
 			var node = new FileSystemNodeViewModel(
 				entry.IsDirectory ? virtualPath : virtualPath.TrimEnd('\\'),
 				entry.IsDirectory, false, _configs, _uiDispatcherQueue, true);
+			node.Parent = this;
 			node.IsArchiveEntry = true;
 			node.ArchiveFilePath = ArchiveFilePath;
 			node.ArchiveRelativePath = entry.RelativePath;
@@ -376,6 +509,27 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 
 		/// <summary>
+		/// 有界自动重试失败的图标加载：退避递增（500ms/1s/1.5s）。
+		/// 若期间图标已由其它请求设置（如共享缓存键的其它文件夹成功），则跳过。
+		/// </summary>
+		private async Task ScheduleIconRetryAsync(string fullPath, bool isDirectory)
+		{
+			if (_iconRetryCount >= MaxIconRetries) return;
+			int attempt = ++_iconRetryCount;
+			try
+			{
+				await Task.Delay(IconRetryBaseDelayMs * attempt);
+			}
+			catch
+			{
+				return;
+			}
+
+			if (_icon != null || _iconRequested) return; // 已有图标或其它加载进行中，无需重试
+			await LoadIconAsync(fullPath, isDirectory);
+		}
+
+		/// <summary>
 		/// 懒加载：异步查询正在使用此文件的进程名称。
 		/// 仅对非目录、非占位符文件生效。
 		/// </summary>
@@ -405,13 +559,15 @@ namespace FastFluentFilesFolders.ViewModels
 				if (provider == null) return;
 				_iconRequested = true;
 
-				// 快速路径：命中缓存直接赋值，省去线程切换与重复解码
+				// 快速路径：命中缓存直接赋值，省去线程切换与重复解码；
+				// 非 UI 线程时也走批量合并，避免导航瞬间大量缓存命中逐行入队
 				if (provider.TryGetCachedIcon(fullPath, isDirectory, out var cached) && cached != null)
 				{
+					_iconRetryCount = 0;
 					if (_uiDispatcherQueue.HasThreadAccess)
 						Icon = cached;
 					else
-						_uiDispatcherQueue.TryEnqueue(() => Icon = cached);
+						QueueIconAssign(this, cached);
 					return;
 				}
 
@@ -434,12 +590,25 @@ namespace FastFluentFilesFolders.ViewModels
 				}
 				if (icon != null)
 				{
-					_uiDispatcherQueue.TryEnqueue(() => Icon = icon);
+					// 批量赋值：同一调度周期内完成的图标一次性应用到界面，
+					// 避免图标解码完成时间不同导致逐行渐进渲染
+					_iconRetryCount = 0;
+					QueueIconAssign(this, icon);
+				}
+				else
+				{
+					// 解码失败（如 SHGetFileInfo 偶发失败）：重置请求标记，
+					// 并主动调度有界重试，让已实体化、不会重读 Icon 的行也能补上图标
+					_iconRequested = false;
+					_ = ScheduleIconRetryAsync(fullPath, isDirectory);
 				}
 			}
 			catch (Exception ex)
 			{
 				Debug.WriteLine($"[LoadIconAsync] Failed for {fullPath}: {ex.Message}");
+				// 异常同样重置请求标记并调度重试
+				_iconRequested = false;
+				_ = ScheduleIconRetryAsync(fullPath, isDirectory);
 			}
 		}
 
@@ -619,19 +788,7 @@ namespace FastFluentFilesFolders.ViewModels
 			var myPath = FullPath;
 
 			var entries = await Task.Run(() => SafeEnumerateEntries(myPath));
-
-			// 目录在前、文件在后，保持 SafeGetDirs()/SafeGetFiles() 的原始集合顺序，不做任何排序
-			var dirNodes = new List<FileSystemNodeViewModel>();
-			var fileNodes = new List<FileSystemNodeViewModel>();
-			foreach (var entry in entries)
-			{
-				var node = new FileSystemNodeViewModel(entry.FullPath, entry.IsDirectory, false, _configs, _uiDispatcherQueue, true);
-				node.ApplyMetadata(entry.IsDirectory, entry.Size, entry.LastWriteTimeUtc, entry.CreationTimeUtc);
-				if (entry.IsDirectory)
-					dirNodes.Add(node);
-				else
-					fileNodes.Add(node);
-			}
+			var (dirNodes, fileNodes) = await BuildChildNodesAsync(entries);
 
 			var allNodes = new List<FileSystemNodeViewModel>(dirNodes.Count + fileNodes.Count);
 			allNodes.AddRange(dirNodes);
@@ -641,15 +798,42 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				Children.Clear();
 				foreach (var item in allNodes)
-				{
-					if (WillSplitToDifferentSorts)
-						item.SortByTime = Helpers.GroupedFileList.GetTimeGroup(item.LastModifiedTime);
-					Children.Add(item);
-				}
+					AddChildWithSort(item);
 
 				var actualCount = Children.Count(c => !c.IsPlaceholder);
 				ChildrenCountText = actualCount > 0 ? $"[{actualCount}]" : "[?]";
 			});
+		}
+
+		/// <summary>
+		/// 后台构建子节点（目录在前、文件在后，保持枚举原始顺序；不做排序）。
+		/// 节点构造与元数据赋值均在后台线程执行，避免大文件夹在 UI 线程批量构造卡顿。
+		/// </summary>
+		private async Task<(List<FileSystemNodeViewModel> DirNodes, List<FileSystemNodeViewModel> FileNodes)> BuildChildNodesAsync(List<FileSystemEntryInfo> entries)
+		{
+			return await Task.Run(() =>
+			{
+				var dirNodes = new List<FileSystemNodeViewModel>();
+				var fileNodes = new List<FileSystemNodeViewModel>();
+				foreach (var entry in entries)
+				{
+					var node = new FileSystemNodeViewModel(entry.FullPath, entry.IsDirectory, false, _configs, _uiDispatcherQueue, true);
+					node.Parent = this;
+					node.ApplyMetadata(entry.IsDirectory, entry.Size, entry.LastWriteTimeUtc, entry.CreationTimeUtc);
+					if (entry.IsDirectory)
+						dirNodes.Add(node);
+					else
+						fileNodes.Add(node);
+				}
+				return (dirNodes, fileNodes);
+			});
+		}
+
+		private void AddChildWithSort(FileSystemNodeViewModel item)
+		{
+			if (WillSplitToDifferentSorts)
+				item.SortByTime = Helpers.GroupedFileList.GetTimeGroup(item.LastModifiedTime);
+			Children.Add(item);
 		}
 
 		private async Task ReloadArchiveChildrenAsync()

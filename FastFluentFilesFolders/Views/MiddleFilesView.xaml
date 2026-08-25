@@ -157,8 +157,13 @@
             </tv:TableView.Columns>
         </uc:LrsTableView>
 
+        <ProgressBar Grid.Row="1"
+                     IsIndeterminate="True"
+                     Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}}"
+                     VerticalAlignment="Top"/>
+
         <StackPanel Orientation="Horizontal" Grid.Row="2" Padding="20,10,20,10">
-            <TextBlock Text="{Binding CurrentFolderContent.Count}" Foreground="#D6D6D6"/>
+            <TextBlock Text="{Binding DisplayedItemCount}" Foreground="#D6D6D6"/>
             <TextBlock Text="{Binding ML.ItemCountSuffix}" Foreground="#D6D6D6"/>
         </StackPanel>
     </Grid>

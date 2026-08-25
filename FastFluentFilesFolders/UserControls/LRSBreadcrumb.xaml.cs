@@ -1,10 +1,9 @@
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
@@ -13,7 +12,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Windows.ApplicationModel.DataTransfer;
@@ -122,15 +120,7 @@ namespace FastFluentFilesFolders.UserControls
         public ICommand CopyPathCommand { get; }
 
         private Compositor _compositor;
-        private CancellationTokenSource? _searchCts;
-        private readonly ObservableCollection<SearchResultItem> _searchResults = new();
-        private Flyout _searchFlyout = null!;
-        private TextBox _searchTextBox = null!;
-        private ListView _searchResultsList = null!;
-        private TextBlock _searchStatusText = null!;
-        private Grid _searchContentGrid = null!;
-
-        private bool _searchFlyoutBuilt;
+        private bool _isSearchMode;
 
         public LRSBreadcrumb()
         {
@@ -159,6 +149,20 @@ namespace FastFluentFilesFolders.UserControls
                 if (e.PropertyName == nameof(LocalizationService.CurrentLanguage))
                     RefreshTooltips();
             };
+
+            SearchTextBox.PlaceholderText = App.ML.SearchPlaceholder;
+            SearchTextBox.SetBinding(TextBox.TextProperty, new Binding
+            {
+                Source = App.SharedViewModel,
+                Path = new PropertyPath(nameof(MainWindowViewModel.SearchText)),
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            });
+            App.SharedViewModel.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MainWindowViewModel.IsSearchMode))
+                    SyncSearchUi();
+            };
         }
 
         private void RefreshTooltips()
@@ -170,6 +174,7 @@ namespace FastFluentFilesFolders.UserControls
             ToolTipService.SetToolTip(HomeButton, App.ML.TooltipHome);
             ToolTipService.SetToolTip(SearchButton, App.ML.TooltipSearch);
             ToolTipService.SetToolTip(CopyPathButton, App.ML.TooltipCopyPath);
+            SearchTextBox.PlaceholderText = App.ML.SearchPlaceholder;
         }
 
         private void PopulatePluginToolbar()
@@ -214,74 +219,9 @@ namespace FastFluentFilesFolders.UserControls
                 PluginToolbarItems.Items.Add(tb);
         }
 
-        private void BuildSearchFlyout()
-        {
-            _searchTextBox = new TextBox { PlaceholderText = App.ML.SearchPlaceholder, Margin = new Thickness(8) };
-            _searchTextBox.TextChanged += OnSearchTextChanged;
-            _searchTextBox.KeyDown += OnSearchTextBoxKeyDown;
-
-            _searchResultsList = new ListView
-            {
-                BorderThickness = new Thickness(0),
-                Margin = new Thickness(4, 0, 4, 4),
-                SelectionMode = ListViewSelectionMode.Single,
-                IsItemClickEnabled = true
-            };
-            _searchResultsList.ItemClick += OnSearchResultItemClick;
-
-            var xaml = """
-                <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-                    <Grid Height="32" Background="Transparent">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <FontIcon Grid.Column="0" Glyph="{Binding IconGlyph}" FontSize="14"
-                                  VerticalAlignment="Center" Margin="4,0,0,0"
-                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                   VerticalAlignment="Center" Margin="6,0,0,0"
-                                   TextTrimming="CharacterEllipsis" FontSize="13"/>
-                        <TextBlock Grid.Column="2" Text="{Binding PathPreview}"
-                                   VerticalAlignment="Center" Margin="6,0,4,0" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                   TextTrimming="CharacterEllipsis"/>
-                    </Grid>
-                </DataTemplate>
-                """;
-            _searchResultsList.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml);
-
-            _searchStatusText = new TextBlock
-            {
-                Text = App.ML.SearchStartHint, Margin = new Thickness(12), FontSize = 12,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
-            };
-            _searchStatusText.Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
-
-            _searchContentGrid = new Grid { MaxHeight = 420 };
-            _searchContentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) });
-            _searchContentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            Grid.SetRow(_searchTextBox, 0);
-            Grid.SetRow(_searchResultsList, 1);
-            Grid.SetRow(_searchStatusText, 1);
-            _searchContentGrid.Children.Add(_searchTextBox);
-            _searchContentGrid.Children.Add(_searchResultsList);
-            _searchContentGrid.Children.Add(_searchStatusText);
-
-            var searchFlyoutStyle = new Style(typeof(FlyoutPresenter));
-            searchFlyoutStyle.Setters.Add(new Setter(FlyoutPresenter.MaxWidthProperty, 9999.0));
-            _searchFlyout = new Flyout
-            {
-                Content = _searchContentGrid,
-                FlyoutPresenterStyle = searchFlyoutStyle
-            };
-            _searchFlyout.Closing += OnSearchFlyoutClosing;
-            FlyoutBase.SetAttachedFlyout(AddressBarArea, _searchFlyout);
-        }
-
         private void OnAddressBarAreaPointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            if (_isSearchMode) return;
             if (_isEditing) return;
             if (!IsButtonOrDescendant(e.OriginalSource as DependencyObject))
             {
@@ -302,6 +242,7 @@ namespace FastFluentFilesFolders.UserControls
 
         private void OnPathTextBoxGotFocus(object sender, RoutedEventArgs e)
         {
+            if (_isSearchMode) return;
             if (!_isEditing)
                 EnterEditMode();
         }
@@ -372,6 +313,7 @@ namespace FastFluentFilesFolders.UserControls
 
         private void OnPathTextBoxLostFocus(object sender, RoutedEventArgs e)
         {
+            if (_isSearchMode) return;
             IsEditing = false;
         }
 
@@ -584,107 +526,41 @@ namespace FastFluentFilesFolders.UserControls
 
         private void OnRefreshClick(object sender, RoutedEventArgs e)
         {
+            // 刷新按钮走真实磁盘重载；普通导航到当前路径不应触发全量重载
             if (!string.IsNullOrEmpty(CurrentPath))
-                NavigateCommand?.Execute(CurrentPath);
+                _ = App.SharedViewModel.RefreshCurrentFolderAsync();
         }
 
         private void OnSearchButtonClick(object sender, RoutedEventArgs e)
         {
-            if (!_searchFlyoutBuilt)
-            {
-                BuildSearchFlyout();
-                _searchFlyoutBuilt = true;
-            }
-
-            _searchContentGrid.Width = AddressBarArea.ActualWidth;
-            _searchResultsList.ItemsSource = _searchResults;
-            _searchTextBox.Text = string.Empty;
-            _searchResults.Clear();
-            _searchStatusText.Visibility = Visibility.Visible;
-            _searchResultsList.Visibility = Visibility.Collapsed;
-
-            FlyoutBase.ShowAttachedFlyout(AddressBarArea);
+            if (_isSearchMode) ExitSearch();
+            else EnterSearch();
         }
 
-        private async void OnSearchTextChanged(object sender, TextChangedEventArgs e)
+        private void EnterSearch()
         {
-            _searchCts?.Cancel();
-            _searchCts = new CancellationTokenSource();
-            var token = _searchCts.Token;
-            var query = _searchTextBox.Text.Trim();
+            _isSearchMode = true;
+            App.SharedViewModel.EnterSearchMode();
+            ExitEditMode();
+            BreadcrumbScrollViewer.Visibility = Visibility.Collapsed;
+            SearchTextBox.Visibility = Visibility.Visible;
+            SearchTextBox.Focus(FocusState.Programmatic);
+            SearchTextBox.SelectAll();
+        }
 
-            if (query.Length == 0)
-            {
-                _searchResults.Clear();
-                _searchStatusText.Text = App.ML.SearchStartHint;
-                _searchStatusText.Visibility = Visibility.Visible;
-                _searchResultsList.Visibility = Visibility.Collapsed;
-                return;
-            }
+        private void ExitSearch()
+        {
+            _isSearchMode = false;
+            App.SharedViewModel.ExitSearchMode();
+            SearchTextBox.Visibility = Visibility.Collapsed;
+            BreadcrumbScrollViewer.Visibility = Visibility.Visible;
+        }
 
-            _searchStatusText.Text = App.ML.SearchInProgress;
-            _searchStatusText.Visibility = Visibility.Visible;
-            _searchResultsList.Visibility = Visibility.Collapsed;
-
-            var currentPath = CurrentPath;
-            if (string.IsNullOrEmpty(currentPath) || !Directory.Exists(currentPath))
-                return;
-
-            try
-            {
-                var results = await Task.Run(() =>
-                {
-                    var list = new List<SearchResultItem>();
-                    try
-                    {
-                        foreach (var dir in Directory.EnumerateDirectories(currentPath, "*", SearchOption.AllDirectories))
-                        {
-                            if (token.IsCancellationRequested) break;
-                            var name = Path.GetFileName(dir);
-                            if (name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                var relative = dir.Substring(currentPath.Length).TrimStart('\\');
-                                list.Add(new SearchResultItem { Name = name, FullPath = dir, IsDirectory = true, PathPreview = relative });
-                            }
-                        }
-                        foreach (var file in Directory.EnumerateFiles(currentPath, "*", SearchOption.AllDirectories))
-                        {
-                            if (token.IsCancellationRequested) break;
-                            var name = Path.GetFileName(file);
-                            if (name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                var relative = file.Substring(currentPath.Length).TrimStart('\\');
-                                list.Add(new SearchResultItem { Name = name, FullPath = file, IsDirectory = false, PathPreview = relative });
-                            }
-                            if (list.Count >= 200) break;
-                        }
-                    }
-                    catch { }
-                    return list;
-                }, token);
-
-                if (token.IsCancellationRequested) return;
-
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    _searchResults.Clear();
-                    foreach (var r in results)
-                        _searchResults.Add(r);
-
-                    if (_searchResults.Count == 0)
-                    {
-                        _searchStatusText.Text = App.ML.SearchNoResults;
-                        _searchStatusText.Visibility = Visibility.Visible;
-                        _searchResultsList.Visibility = Visibility.Collapsed;
-                    }
-                    else
-                    {
-                        _searchStatusText.Visibility = Visibility.Collapsed;
-                        _searchResultsList.Visibility = Visibility.Visible;
-                    }
-                });
-            }
-            catch (OperationCanceledException) { }
+        private void SyncSearchUi()
+        {
+            var vm = App.SharedViewModel;
+            if (vm.IsSearchMode == _isSearchMode) return;
+            if (vm.IsSearchMode) EnterSearch(); else ExitSearch();
         }
 
         private void OnSearchTextBoxKeyDown(object sender, KeyRoutedEventArgs e)
@@ -692,24 +568,7 @@ namespace FastFluentFilesFolders.UserControls
             if (e.Key == Windows.System.VirtualKey.Escape)
             {
                 e.Handled = true;
-                _searchFlyout.Hide();
-            }
-        }
-
-        private void OnSearchFlyoutClosing(object sender, object e)
-        {
-            _searchCts?.Cancel();
-        }
-
-        private void OnSearchResultItemClick(object sender, ItemClickEventArgs e)
-        {
-            if (e.ClickedItem is SearchResultItem result)
-            {
-                _searchFlyout.Hide();
-                if (result.IsDirectory)
-                    NavigateCommand?.Execute(result.FullPath);
-                else
-                    FastFluentFilesFolders.ViewModels.MainWindowViewModel.OpenWithDefaultProgram(result.FullPath);
+                ExitSearch();
             }
         }
 
@@ -752,14 +611,5 @@ namespace FastFluentFilesFolders.UserControls
         public bool IsLast { get; set; }
         public ICommand NavigateCommand { get; set; }
         public ICommand NavigateSubCommand { get; set; }
-    }
-
-    public class SearchResultItem
-    {
-        public string Name { get; set; } = string.Empty;
-        public string FullPath { get; set; } = string.Empty;
-        public bool IsDirectory { get; set; }
-        public string PathPreview { get; set; } = string.Empty;
-        public string IconGlyph => IsDirectory ? "\uE8B7" : "\uE8A5";
     }
 }

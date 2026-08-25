@@ -105,7 +105,13 @@
                  IsReadOnly="True"
                  Text="{Binding CurrentPath, ElementName=LRSB, Mode=OneWay}"/>
 
-				<ScrollViewer x:Name="BreadcrumbScrollViewer"
+				<TextBox x:Name="SearchTextBox"
+                     VerticalAlignment="Stretch" CornerRadius="16"
+                     Background="Transparent" BorderThickness="0"
+                     Visibility="Collapsed"
+                     KeyDown="OnSearchTextBoxKeyDown"/>
+
+			<ScrollViewer x:Name="BreadcrumbScrollViewer"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Disabled"
                       IsHitTestVisible="True"

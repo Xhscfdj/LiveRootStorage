@@ -1,4 +1,4 @@
-﻿<UserControl
+<UserControl
     x:Class="FastFluentFilesFolders.UserControls.FileOperationsButton"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -112,7 +112,7 @@
             </Flyout>
         </Button.Flyout>
         <StackPanel Orientation="Horizontal" Spacing="4">
-            <FontIcon Glyph="&#xE8B7;" FontSize="12" VerticalAlignment="Center"/>
+            <FontIcon x:Name="IslandIcon" Glyph="&#xE8B7;" FontSize="12" VerticalAlignment="Center"/>
             <TextBlock x:Name="CountText" Text="" VerticalAlignment="Center" FontSize="12"/>
         </StackPanel>
     </Button>

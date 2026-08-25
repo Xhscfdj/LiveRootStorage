@@ -1,9 +1,11 @@
 # Draft — 搜索从弹窗改为 TableView 显示搜索结果
 
-- status: awaiting-approval
+- status: approved (plan written)
 - intent: clear
 - review_required: false
 - slug: search-results-in-tableview
+- plan: .omo/plans/search-results-in-tableview.md
+- metis: 已跑 gap analysis，折叠 4 处正确性修复（空查询通知/无权限目录丢文件/列头空白/编辑模式 LostFocus 冲突）+ 状态栏计数 + 搜索模式禁用文件操作
 
 ## 意图判定
 CLEAR —— 把搜索（当前 `LRSBreadcrumb` 的 Flyout+ListView 弹窗）改为用主界面 `LrsTableView` 显示搜索结果。
