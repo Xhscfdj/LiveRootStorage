@@ -32,7 +32,7 @@
                                   IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
                                   IsSelected="{Binding IsSelected, Mode=TwoWay}">
                         <TreeViewItem.Content>
-                            <StackPanel Orientation="Horizontal">
+                            <StackPanel Orientation="Horizontal" Opacity="{Binding RowOpacity, Mode=OneWay}">
                                 <Image Source="{Binding Icon}" Width="20" Height="20" />
                                 <TextBlock Text="{Binding Name}" Margin="5,0,0,0" />
                             </StackPanel>

@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FastFluentFilesFolders.Views.PropertiesSecurityView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:FastFluentFilesFolders.Views"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </UserControl.Resources>
+
+    <StackPanel Spacing="12">
+        <TextBlock Text="{Binding ObjectCaption}"
+                   FontSize="12"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   TextWrapping="Wrap" />
+        <TextBlock Text="{Binding OwnerCaption}"
+                   FontSize="12"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   TextWrapping="Wrap"
+                   Visibility="{Binding HasOwner, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <InfoBar Message="{Binding ErrorMessage}"
+                 Severity="Informational"
+                 IsClosable="False"
+                 IsOpen="{Binding HasError, Mode=OneWay}"
+                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <!-- 卡片 1：组或用户名 -->
+        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="{Binding UsersGroupsLabel}"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="4,4,4,8" />
+                <Border Grid.Row="1" Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <Grid Grid.Row="2" Margin="0,4,0,0">
+                    <ListView ItemsSource="{Binding Principals}"
+                              SelectedItem="{Binding SelectedPrincipal, Mode=TwoWay}"
+                              SelectionMode="Single"
+                              MaxHeight="168">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnSpacing="10" Padding="4,6,4,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="{Binding Glyph}" FontSize="16" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding FullIdentity}"
+                                                   FontSize="12"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Visibility="{Binding HasDomain, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock Text="{Binding NoEntriesLabel}"
+                               TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Margin="4,12,4,8"
+                               Visibility="{Binding HasNoPrincipals, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 卡片 2：所选主体的权限（允许/拒绝矩阵） -->
+        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid ColumnSpacing="8" Margin="4,4,4,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding PermissionsTitle}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button Grid.Column="1"
+                            Content="{Binding AdvancedLabel}"
+                            VerticalAlignment="Center"
+                            IsEnabled="{Binding AdvancedEnabled}"
+                            Click="OnAdvancedClick" />
+                </Grid>
+
+                <Border Grid.Row="1" Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <Grid Grid.Row="2" ColumnSpacing="8" Padding="4,8,4,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Column="1" Text="{Binding AllowHeaderLabel}" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                    <TextBlock Grid.Column="2" Text="{Binding DenyHeaderLabel}" HorizontalAlignment="Center" Margin="0,0,0,4" />
+
+                    <!-- 完全控制 -->
+                    <TextBlock Grid.Row="1" Text="{Binding FullControlLabel}" VerticalAlignment="Center" Margin="0,4,0,4" />
+                    <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AllowFullControl, Mode=TwoWay}"
+                              IsEnabled="{Binding AllowFullControlEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+                    <CheckBox Grid.Row="1" Grid.Column="2" IsChecked="{Binding DenyFullControl, Mode=TwoWay}"
+                              IsEnabled="{Binding DenyFullControlEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+
+                    <!-- 修改 -->
+                    <TextBlock Grid.Row="2" Text="{Binding ModifyLabel}" VerticalAlignment="Center" Margin="0,4,0,4" />
+                    <CheckBox Grid.Row="2" Grid.Column="1" IsChecked="{Binding AllowModify, Mode=TwoWay}" IsEnabled="{Binding AllowModifyEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+                    <CheckBox Grid.Row="2" Grid.Column="2" IsChecked="{Binding DenyModify, Mode=TwoWay}" IsEnabled="{Binding DenyModifyEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+
+                    <!-- 读取和执行 -->
+                    <TextBlock Grid.Row="3" Text="{Binding ReadExecuteLabel}" VerticalAlignment="Center" Margin="0,4,0,4" />
+                    <CheckBox Grid.Row="3" Grid.Column="1" IsChecked="{Binding AllowReadExecute, Mode=TwoWay}" IsEnabled="{Binding AllowReadExecuteEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+                    <CheckBox Grid.Row="3" Grid.Column="2" IsChecked="{Binding DenyReadExecute, Mode=TwoWay}" IsEnabled="{Binding DenyReadExecuteEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+
+                    <!-- 列出文件夹目录（仅文件夹） -->
+                    <TextBlock Grid.Row="4" Text="{Binding ListDirectoryLabel}" VerticalAlignment="Center" Margin="0,4,0,4"
+                               Visibility="{Binding ShowListDirectoryRow, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding AllowListDirectory, Mode=TwoWay}" IsEnabled="{Binding AllowListDirectoryEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2"
+                              Visibility="{Binding ShowListDirectoryRow, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <CheckBox Grid.Row="4" Grid.Column="2" IsChecked="{Binding DenyListDirectory, Mode=TwoWay}" IsEnabled="{Binding DenyListDirectoryEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2"
+                              Visibility="{Binding ShowListDirectoryRow, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <!-- 读取 -->
+                    <TextBlock Grid.Row="5" Text="{Binding ReadLabel}" VerticalAlignment="Center" Margin="0,4,0,4" />
+                    <CheckBox Grid.Row="5" Grid.Column="1" IsChecked="{Binding AllowRead, Mode=TwoWay}" IsEnabled="{Binding AllowReadEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+                    <CheckBox Grid.Row="5" Grid.Column="2" IsChecked="{Binding DenyRead, Mode=TwoWay}" IsEnabled="{Binding DenyReadEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+
+                    <!-- 写入 -->
+                    <TextBlock Grid.Row="6" Text="{Binding WriteLabel}" VerticalAlignment="Center" Margin="0,4,0,4" />
+                    <CheckBox Grid.Row="6" Grid.Column="1" IsChecked="{Binding AllowWrite, Mode=TwoWay}" IsEnabled="{Binding AllowWriteEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+                    <CheckBox Grid.Row="6" Grid.Column="2" IsChecked="{Binding DenyWrite, Mode=TwoWay}" IsEnabled="{Binding DenyWriteEnabled}" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2" />
+
+                    <!-- 特殊权限（只读展示） -->
+                    <TextBlock Grid.Row="7" Text="{Binding SpecialLabel}" VerticalAlignment="Center" Margin="0,4,0,4"
+                               Visibility="{Binding ShowSpecialRow, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <CheckBox Grid.Row="7" Grid.Column="1" IsChecked="{Binding AllowSpecial, Mode=OneWay}" IsEnabled="False" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2"
+                              Visibility="{Binding ShowSpecialRow, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <CheckBox Grid.Row="7" Grid.Column="2" IsChecked="{Binding DenySpecial, Mode=OneWay}" IsEnabled="False" MinWidth="0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,2,4,2"
+                              Visibility="{Binding ShowSpecialRow, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <!-- 提示 -->
+                    <TextBlock Grid.Row="8" Grid.ColumnSpan="3"
+                               Text="{Binding PermissionHintText}"
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,10,0,4" />
+                </Grid>
+            </Grid>
+        </Border>
+    </StackPanel>
+</UserControl>

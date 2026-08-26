@@ -61,7 +61,7 @@
                 <tv:TableViewTemplateColumn x:Name="ColName" Width="4*" CanSort="True" SortMemberPath="Name">
                     <tv:TableViewTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:FileSystemNodeViewModel">
-                            <Grid DoubleTapped="OnRowDoubleTapped" Opacity="{Binding CutOpacity, Mode=OneWay}">
+                            <Grid DoubleTapped="OnRowDoubleTapped" Opacity="{Binding RowOpacity, Mode=OneWay}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -107,6 +107,7 @@
                             <TextBlock DoubleTapped="OnRowDoubleTapped"
                                        Text="{Binding LastModifiedTimeString}"
                                        Visibility="{x:Bind IsPlaceholder, Converter={StaticResource InvertVisibilityConverter}, Mode=OneWay}"
+                                       Opacity="{Binding RowOpacity, Mode=OneWay}"
                                        VerticalAlignment="Center"/>
                         </DataTemplate>
                     </tv:TableViewTemplateColumn.CellTemplate>
@@ -118,6 +119,7 @@
                             <TextBlock DoubleTapped="OnRowDoubleTapped"
                                        Text="{Binding FirstCreatedTimeString}"
                                        Visibility="{x:Bind IsPlaceholder, Converter={StaticResource InvertVisibilityConverter}, Mode=OneWay}"
+                                       Opacity="{Binding RowOpacity, Mode=OneWay}"
                                        VerticalAlignment="Center"/>
                         </DataTemplate>
                     </tv:TableViewTemplateColumn.CellTemplate>
@@ -126,7 +128,7 @@
                 <tv:TableViewTemplateColumn x:Name="ColSize" Width="*" CanSort="True" SortMemberPath="ExactSize">
                     <tv:TableViewTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:FileSystemNodeViewModel">
-                            <Grid DoubleTapped="OnRowDoubleTapped">
+                            <Grid DoubleTapped="OnRowDoubleTapped" Opacity="{Binding RowOpacity, Mode=OneWay}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>

@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.WinUI;
 using FastFluentFilesFolders.Models;
 using FastFluentFilesFolders.Services;
+using FastFluentFilesFolders.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -31,6 +32,7 @@ namespace FastFluentFilesFolders.ViewModels
 	public partial class MainWindowViewModel : ViewModelBase
 	{
 		private IFileOperator _fileOperator;
+		private PropertiesWindow? _propertiesWindow;
 		public MultiLanguageStringsViewModel ML { get; }
 		public MainWindowViewModel(IIconProvider iconProvider, Microsoft.UI.Dispatching.DispatcherQueue uiDispatcherQueue, Configs configs, IFileOperator fileOperator, MultiLanguageStringsViewModel ml)
 		{
@@ -474,99 +476,45 @@ namespace FastFluentFilesFolders.ViewModels
 			await _uiDispatcherQueue.EnqueueAsync(() => ShowPropertiesDialog(item));
 		}
 
-		private async void ShowPropertiesDialog(FileSystemNodeViewModel item)
+		/// <summary>
+		/// 以独立 WinUI 子窗口显示文件/文件夹属性。
+		/// </summary>
+		private void ShowPropertiesDialog(FileSystemNodeViewModel item)
 		{
-			var panel = new StackPanel { Spacing = 12, Width = 420, Margin = new Thickness(0, 0, 0, 8) };
-
-			var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-			if (item.Icon != null)
-				header.Children.Add(new Image { Source = item.Icon, Width = 32, Height = 32, VerticalAlignment = VerticalAlignment.Center });
-			header.Children.Add(new TextBlock
+			try
 			{
-				Text = item.Name,
-				FontSize = 18,
-				FontWeight = FontWeights.SemiBold,
-				TextTrimming = TextTrimming.CharacterEllipsis,
-				VerticalAlignment = VerticalAlignment.Center
-			});
-			panel.Children.Add(header);
+				if (App.MainWindow == null)
+					return;
 
-			panel.Children.Add(new Border { Height = 1, Background = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"] });
+				string fullPath = item.FullPath;
+				if (string.IsNullOrWhiteSpace(fullPath))
+					return;
 
-			var propsGrid = new Grid { ColumnSpacing = 16, RowSpacing = 10 };
-			propsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
-			propsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+				bool exists = item.IsDirectory ? Directory.Exists(fullPath) : File.Exists(fullPath);
+				if (!exists)
+					return;
 
-			int row = 0;
-			void AddRow(string label, string value)
-			{
-				propsGrid.RowDefinitions.Add(new RowDefinition());
-				var lbl = new TextBlock
+				_propertiesWindow?.Close();
+				var window = new PropertiesWindow(item);
+				_propertiesWindow = window;
+				window.Closed += (_, _) =>
 				{
-					Text = label,
-					Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-					FontSize = 13,
-					VerticalAlignment = VerticalAlignment.Center,
-					Margin = new Thickness(0, 0, 4, 0)
+					if (ReferenceEquals(_propertiesWindow, window))
+						_propertiesWindow = null;
 				};
-				var val = new TextBlock
-				{
-					Text = value,
-					Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
-					FontSize = 13,
-					TextWrapping = TextWrapping.Wrap,
-					VerticalAlignment = VerticalAlignment.Center
-				};
-				Grid.SetRow(lbl, row); Grid.SetColumn(lbl, 0);
-				Grid.SetRow(val, row); Grid.SetColumn(val, 1);
-				propsGrid.Children.Add(lbl);
-				propsGrid.Children.Add(val);
-				row++;
+				window.Activate();
 			}
-
-			var typeDesc = item.IsDirectory ? App.ML.PropertiesFolder
-				: item.Extension.Length > 0 ? $"{item.Extension.TrimStart('.')} {App.ML.PropertiesFile}"
-				: App.ML.PropertiesFile;
-			AddRow(App.ML.PropertiesType, typeDesc);
-			AddRow(App.ML.PropertiesPath, item.FullPath);
-			var sizeText = item.IsDirectory ? item.VisualSize : $"{item.VisualSize} ({string.Format(App.ML.PropertiesBytesFmt, item.ExactSize.ToString("N0"))})";
-			AddRow(App.ML.PropertiesSize, sizeText);
-			AddRow(App.ML.PropertiesModified, item.LastModifiedTimeString);
-			AddRow(App.ML.PropertiesCreated, item.FirstCreatedTimeString);
-
-			// 使用进程（仅对文件显示）
-			if (!item.IsDirectory)
+			catch (Exception ex)
 			{
-				var processInfo = ProcessHelper.GetProcessesUsingFile(item.FullPath);
-				AddRow(App.ML.PropertiesProcesses, string.IsNullOrEmpty(processInfo) ? "-" : processInfo);
+				Debug.WriteLine($"[Properties] Failed to open properties window for '{item.FullPath}': {ex.Message}");
 			}
+		}
 
-			panel.Children.Add(propsGrid);
-
-			var dialog = new ContentDialog
-			{
-				Title = App.ML.PropertiesTitle,
-				Content = panel,
-				CloseButtonText = App.ML.PropertiesClose,
-				DefaultButton = ContentDialogButton.Close,
-				XamlRoot = App.MainWindow.Content.XamlRoot
-			};
-
-			panel.IsTabStop = true;
-			panel.UseSystemFocusVisuals = false;
-			dialog.Opened += (_, _) => panel.Focus(FocusState.Programmatic);
-
-			void OnDialogKeyDown(object _, KeyRoutedEventArgs args)
-			{
-				if (args.Key == VirtualKey.C)
-				{
-					dialog.Hide();
-					args.Handled = true;
-				}
-			}
-			dialog.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnDialogKeyDown), true);
-
-			_ = dialog.ShowAsync();
+		/// <summary>主窗口关闭时同步关闭属性子窗口。</summary>
+		public void ClosePropertiesWindow()
+		{
+			_propertiesWindow?.Close();
+			_propertiesWindow = null;
 		}
 
 		[RelayCommand]
@@ -1002,8 +950,8 @@ namespace FastFluentFilesFolders.ViewModels
 			var node = new FileSystemNodeViewModel(path, isDir, false, AppConfigs!, _uiDispatcherQueue, true);
 			try
 			{
-				if (isDir) { var d = new DirectoryInfo(path); node.ApplyMetadata(true, 0, d.LastWriteTimeUtc, d.CreationTimeUtc); }
-				else { var f = new FileInfo(path); node.ApplyMetadata(false, f.Length, f.LastWriteTimeUtc, f.CreationTimeUtc); }
+				if (isDir) { var d = new DirectoryInfo(path); node.ApplyMetadata(true, 0, d.LastWriteTimeUtc, d.CreationTimeUtc, (d.Attributes & FileAttributes.Hidden) != 0, (d.Attributes & FileAttributes.System) != 0); }
+				else { var f = new FileInfo(path); node.ApplyMetadata(false, f.Length, f.LastWriteTimeUtc, f.CreationTimeUtc, (f.Attributes & FileAttributes.Hidden) != 0, (f.Attributes & FileAttributes.System) != 0); }
 			}
 			// 元数据读取失败时保留默认值
 			catch { }

@@ -245,6 +245,8 @@ namespace FastFluentFilesFolders.ViewModels
 		[ObservableProperty] private bool _isRenaming = false;
 		[ObservableProperty] private bool _isCutPending = false;
 		[ObservableProperty] private bool _isSizeCalculated = false;
+		[ObservableProperty] private bool _isHidden = false;
+		[ObservableProperty] private bool _isSystem = false;
 
 		// 使用进程（懒加载，类似 Icon）
 		private string _processesUsingThisFile = string.Empty;
@@ -305,6 +307,10 @@ namespace FastFluentFilesFolders.ViewModels
 
 		public double CutOpacity => IsCutPending ? 0.4 : 1.0;
 
+		// 隐藏/系统文件以半透明显示（类似 Windows 资源管理器的淡化效果）
+		public double RowOpacity => (IsHidden || IsSystem) ? HiddenOrSystemOpacity : CutOpacity;
+		public const double HiddenOrSystemOpacity = 0.5;
+
 		partial void OnIsRenamingChanged(bool value)
 		{
 			OnPropertyChanged(nameof(IsRenamingVisibility));
@@ -314,7 +320,11 @@ namespace FastFluentFilesFolders.ViewModels
 		partial void OnIsCutPendingChanged(bool value)
 		{
 			OnPropertyChanged(nameof(CutOpacity));
+			OnPropertyChanged(nameof(RowOpacity));
 		}
+
+		partial void OnIsHiddenChanged(bool value) => OnPropertyChanged(nameof(RowOpacity));
+		partial void OnIsSystemChanged(bool value) => OnPropertyChanged(nameof(RowOpacity));
 
 		// 树形结构相关（文件夹特有，文件则为空）
 		private ObservableCollection<FileSystemNodeViewModel>? _children;
@@ -420,6 +430,7 @@ namespace FastFluentFilesFolders.ViewModels
 						var dirInfo = await Task.Run(() => new DirectoryInfo(FullPath));
 						LastModifiedTime = dirInfo.LastWriteTimeUtc;
 						FirstCreatedTime = dirInfo.CreationTimeUtc;
+						ApplyFileAttributes(dirInfo.Attributes);
 					}
 					ExactSize = 0;
 				}
@@ -429,6 +440,7 @@ namespace FastFluentFilesFolders.ViewModels
 					LastModifiedTime = fileInfo.LastWriteTimeUtc;
 					FirstCreatedTime = fileInfo.CreationTimeUtc;
 					ExactSize = fileInfo.Length;
+					ApplyFileAttributes(fileInfo.Attributes);
 				}
 
 				await _uiDispatcherQueue.EnqueueAsync(() =>
@@ -465,7 +477,8 @@ namespace FastFluentFilesFolders.ViewModels
 		}	
 
 		// 直接应用枚举时一次性获取到的元数据，避免每个子项再单独发起一次文件系统访问
-		public void ApplyMetadata(bool isDirectory, long size, DateTime lastWriteUtc, DateTime creationUtc)
+		public void ApplyMetadata(bool isDirectory, long size, DateTime lastWriteUtc, DateTime creationUtc,
+			bool isHidden = false, bool isSystem = false)
 		{
 			if (IsPlaceholder) return;
 			_hasBasicInfo = true;
@@ -475,6 +488,15 @@ namespace FastFluentFilesFolders.ViewModels
 			LastModifiedTimeString = LastModifiedTime.ToString("yyyy-MM-dd HH:mm:ss");
 			FirstCreatedTimeString = FirstCreatedTime.ToString("yyyy-MM-dd HH:mm:ss");
 			VisualSize = FormatFileSize(ExactSize);
+			IsHidden = isHidden;
+			IsSystem = isSystem;
+		}
+
+		// 根据文件属性设置隐藏/系统标记（用于半透明显示）
+		public void ApplyFileAttributes(FileAttributes attributes)
+		{
+			IsHidden = (attributes & FileAttributes.Hidden) != 0;
+			IsSystem = (attributes & FileAttributes.System) != 0;
 		}
 
 		// 同步读取磁盘元数据（用于粘贴/新建等刚创建的项，确保加入分组视图前 LastModifiedTime 已就绪）
@@ -486,12 +508,16 @@ namespace FastFluentFilesFolders.ViewModels
 				if (IsDirectory)
 				{
 					var dirInfo = new DirectoryInfo(FullPath);
-					ApplyMetadata(true, 0, dirInfo.LastWriteTimeUtc, dirInfo.CreationTimeUtc);
+					ApplyMetadata(true, 0, dirInfo.LastWriteTimeUtc, dirInfo.CreationTimeUtc,
+						(dirInfo.Attributes & FileAttributes.Hidden) != 0,
+						(dirInfo.Attributes & FileAttributes.System) != 0);
 				}
 				else if (File.Exists(FullPath))
 				{
 					var fileInfo = new FileInfo(FullPath);
-					ApplyMetadata(false, fileInfo.Length, fileInfo.LastWriteTimeUtc, fileInfo.CreationTimeUtc);
+					ApplyMetadata(false, fileInfo.Length, fileInfo.LastWriteTimeUtc, fileInfo.CreationTimeUtc,
+						(fileInfo.Attributes & FileAttributes.Hidden) != 0,
+						(fileInfo.Attributes & FileAttributes.System) != 0);
 				}
 			}
 			catch (Exception ex)
@@ -721,7 +747,9 @@ namespace FastFluentFilesFolders.ViewModels
 			bool IsDirectory,
 			long Size,
 			DateTime LastWriteTimeUtc,
-			DateTime CreationTimeUtc);
+			DateTime CreationTimeUtc,
+			bool IsHidden,
+			bool IsSystem);
 
 		public static List<FileSystemEntryInfo> SafeEnumerateEntries(string path)
 		{
@@ -740,7 +768,9 @@ namespace FastFluentFilesFolders.ViewModels
 							isDir,
 							size,
 							entry.LastWriteTimeUtc,
-							entry.CreationTimeUtc));
+							entry.CreationTimeUtc,
+							(entry.Attributes & FileAttributes.Hidden) != 0,
+							(entry.Attributes & FileAttributes.System) != 0));
 					}
 					catch (Exception ex)
 					{
@@ -819,7 +849,7 @@ namespace FastFluentFilesFolders.ViewModels
 				{
 					var node = new FileSystemNodeViewModel(entry.FullPath, entry.IsDirectory, false, _configs, _uiDispatcherQueue, true);
 					node.Parent = this;
-					node.ApplyMetadata(entry.IsDirectory, entry.Size, entry.LastWriteTimeUtc, entry.CreationTimeUtc);
+					node.ApplyMetadata(entry.IsDirectory, entry.Size, entry.LastWriteTimeUtc, entry.CreationTimeUtc, entry.IsHidden, entry.IsSystem);
 					if (entry.IsDirectory)
 						dirNodes.Add(node);
 					else

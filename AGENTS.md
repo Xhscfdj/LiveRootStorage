@@ -8,7 +8,8 @@
 ## Build & run
 ```powershell
 dotnet build
-dotnet run --project LRS
+dotnet run --project
+# At C:\Users\aaron\source\repos\LRS\FastFluentFilesFolders
 ```
 Launch profiles in `Properties/launchSettings.json`: **MsixPackage** (packaged) and **Project** (unpackaged).
 

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FastFluentFilesFolders.Views.PropertiesPreviousVersionsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:FastFluentFilesFolders.Views"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </UserControl.Resources>
+
+    <StackPanel Spacing="12">
+        <TextBlock Text="{Binding NoteText}"
+                   TextWrapping="Wrap"
+                   FontSize="13"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        <TextBlock Text="{Binding LoadingText}"
+                   TextWrapping="Wrap"
+                   FontSize="13"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <ListView ItemsSource="{Binding Versions}"
+                  Height="200"
+                  SelectionMode="Single"
+                  Visibility="{Binding HasVersions, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <TextBlock Text="{Binding EmptyMessage}"
+                   TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Visibility="{Binding HasEmptyMessage, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="{Binding OpenLabel}" MinWidth="90" IsEnabled="{Binding HasVersions}" />
+            <Button Content="{Binding RestoreLabel}" MinWidth="90" IsEnabled="{Binding HasVersions}" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

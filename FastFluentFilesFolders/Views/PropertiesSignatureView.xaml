@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FastFluentFilesFolders.Views.PropertiesSignatureView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:FastFluentFilesFolders.Views"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <DataTemplate x:Key="SignatureRowTemplate">
+            <Grid ColumnSpacing="12" Padding="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Signer}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding Digest}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding Timestamp}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel Spacing="12">
+        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="16">
+            <StackPanel Spacing="8">
+                <TextBlock Text="{Binding EmbeddedHeader}" FontSize="14" FontWeight="SemiBold" />
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding SignerColumnHeader}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="{Binding DigestColumnHeader}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="{Binding TimestampColumnHeader}" FontWeight="SemiBold" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding EmbeddedRows}" ItemTemplate="{StaticResource SignatureRowTemplate}" />
+                <Button Content="{Binding DetailsButtonLabel}"
+                        HorizontalAlignment="Right"
+                        IsEnabled="{Binding HasEmbeddedDetails}"
+                        Visibility="{Binding HasEmbeddedDetails, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Click="OnEmbeddedDetailsClick" />
+            </StackPanel>
+        </Border>
+
+        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="16">
+            <StackPanel Spacing="8">
+                <TextBlock Text="{Binding CatalogHeader}" FontSize="14" FontWeight="SemiBold" />
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding SignerColumnHeader}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="{Binding DigestColumnHeader}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="{Binding TimestampColumnHeader}" FontWeight="SemiBold" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding CatalogRows}" ItemTemplate="{StaticResource SignatureRowTemplate}" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -1,4 +1,4 @@
-﻿using FastFluentFilesFolders.ViewModels;
+using FastFluentFilesFolders.ViewModels;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
@@ -204,6 +204,7 @@ namespace FastFluentFilesFolders.Views
         private void OnWindowClosed(object sender, WindowEventArgs args)
         {
             DisposeAcrylicController();
+            VM.ClosePropertiesWindow();
         }
 
         private void OnWindowThemeChanged(FrameworkElement sender, object args)

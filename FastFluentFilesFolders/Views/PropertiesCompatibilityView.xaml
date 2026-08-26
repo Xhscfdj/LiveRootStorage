@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FastFluentFilesFolders.Views.PropertiesCompatibilityView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ccl="using:CommunityToolkit.WinUI.Controls"
+    mc:Ignorable="d">
+
+    <StackPanel Spacing="8">
+        <!-- 疑难解答（非设置项，保持原文案） -->
+        <TextBlock Text="{Binding TroubleText}" TextWrapping="Wrap" FontSize="13" />
+        <Button Content="{Binding TroubleButtonText}" HorizontalAlignment="Left" Click="OnTroubleClick" />
+        <TextBlock Text="{Binding ManualLinkText}"
+                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                   FontSize="13"
+                   Margin="0,0,0,8" />
+
+        <!-- 兼容模式 -->
+        <ccl:SettingsExpander Header="{Binding CompatModeHeader}"
+                              Description="{Binding CompatEnabledLabel}"
+                              IsExpanded="{Binding CompatModeEnabled}">
+            <ccl:SettingsExpander.Content>
+                <ToggleSwitch IsOn="{Binding CompatModeEnabled, Mode=TwoWay}"
+                              OnContent="" OffContent="" MinWidth="0" />
+            </ccl:SettingsExpander.Content>
+            <ccl:SettingsExpander.Items>
+                <ccl:SettingsCard>
+                    <ComboBox ItemsSource="{Binding CompatModes}"
+                              SelectedIndex="{Binding SelectedCompatModeIndex, Mode=TwoWay}"
+                              IsEnabled="{Binding IsCompatModeComboEnabled}"
+                              MinWidth="220"
+                              HorizontalAlignment="Stretch" />
+                </ccl:SettingsCard>
+            </ccl:SettingsExpander.Items>
+        </ccl:SettingsExpander>
+
+        <!-- 简化的颜色模式 -->
+        <ccl:SettingsExpander Header="{Binding SimplifiedColorsLabel}"
+                              Description="{Binding ColorModeDescription}"
+                              IsExpanded="{Binding SimplifiedColorsEnabled}">
+            <ccl:SettingsExpander.Content>
+                <ToggleSwitch IsOn="{Binding SimplifiedColorsEnabled, Mode=TwoWay}"
+                              OnContent="" OffContent="" MinWidth="0" />
+            </ccl:SettingsExpander.Content>
+            <ccl:SettingsExpander.Items>
+                <ccl:SettingsCard>
+                    <ComboBox ItemsSource="{Binding ColorModes}"
+                              SelectedIndex="{Binding SelectedColorModeIndex, Mode=TwoWay}"
+                              IsEnabled="{Binding IsColorModeComboEnabled}"
+                              MinWidth="220"
+                              HorizontalAlignment="Stretch" />
+                </ccl:SettingsCard>
+            </ccl:SettingsExpander.Items>
+        </ccl:SettingsExpander>
+
+        <ccl:SettingsCard Header="{Binding Run640x480Label}">
+            <ToggleSwitch IsOn="{Binding Run640x480, Mode=TwoWay}" OnContent="" OffContent="" />
+        </ccl:SettingsCard>
+
+        <ccl:SettingsCard Header="{Binding DisableFullscreenOptimizationsLabel}">
+            <ToggleSwitch IsOn="{Binding DisableFullscreenOptimizations, Mode=TwoWay}" OnContent="" OffContent="" />
+        </ccl:SettingsCard>
+
+        <ccl:SettingsCard Header="{Binding RunAsAdminLabel}">
+            <ToggleSwitch IsOn="{Binding RunAsAdmin, Mode=TwoWay}" OnContent="" OffContent="" />
+        </ccl:SettingsCard>
+
+        <ccl:SettingsCard Header="{Binding RegisterForRestartLabel}">
+            <ToggleSwitch IsOn="{Binding RegisterForRestart, Mode=TwoWay}" OnContent="" OffContent="" />
+        </ccl:SettingsCard>
+
+        <ccl:SettingsCard Header="{Binding LegacyIccLabel}">
+            <ToggleSwitch IsOn="{Binding LegacyIcc, Mode=TwoWay}" OnContent="" OffContent="" />
+        </ccl:SettingsCard>
+
+        <ccl:SettingsCard Header="{Binding ChangeHighDpiLabel}">
+            <Button Content="{Binding ChangeHighDpiLabel}" Click="OnHighDpiClick" />
+        </ccl:SettingsCard>
+
+        <ccl:SettingsCard Header="{Binding ChangeAllUsersLabel}">
+            <Button Content="{Binding ChangeAllUsersLabel}" Click="OnAllUsersClick" />
+        </ccl:SettingsCard>
+    </StackPanel>
+</UserControl>

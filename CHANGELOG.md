@@ -1,3 +1,21 @@
+## 1.0.6
+- [Function:Change] [2026/8/25] 属性弹窗改为 XAML 实现的 WinUI 子窗口：现代化标题栏（无标题文本，仅系统最小化/最大化/关闭），SelectorBar 选项卡涵盖常规、数字签名、安全、详细信息、以前的版本；.exe 额外显示兼容性选项卡，可编辑兼容模式/管理员运行/256 色/640x480/禁用全屏优化/高 DPI 缩放
+- [Function:Change] [2026/8/25] 按 Windows 文件资源管理器补齐属性弹窗功能：常规页支持可编辑文件名、描述、占用空间、高级属性（存档/索引）；数字签名分嵌入签名/目录签名并带详细信息；安全页展示对象名、组或用户名与权限（允许/拒绝）；兼容性页补充兼容疑难解答、简化的颜色模式、注册程序重启、旧版 ICC、更改高 DPI、更改所有用户设置；以前的版本页支持查询并带打开/还原按钮
+- [Function:Change] [2026/8/25] 隐藏文件与系统文件改为半透明显示（不透明度 50%）：文件表格的名称/修改/创建/大小列与左侧目录树统一淡化，剪切（40%）状态表现保持不变；属性在目录枚举时一次性读取，独立节点、搜索结果与刷新路径同步生效
+- [Function:Change] [2026/8/25] 属性窗口按 content-basics 优化视觉效果：统一 24px 页边距与 12px 间距节奏，常规/数字签名/详细信息等内容改为卡片式表面（LayerFill 背景 + CardStroke 描边 + 8px 圆角），章节标题统一层级与下边距，次级说明改用小号次级前景色文本
+- [Function:Change] [2026/8/25] 属性窗口“安全”选项卡参照 Files 重构：组或用户名卡片列表 + 所选主体权限卡片，允许/拒绝复选框矩阵（完全控制/修改/读取和执行/列出文件夹目录/读取/写入/特殊权限），继承项置灰并提示；新增“高级(V)”按钮打开高级安全设置对话框（所有者/组 + 每条 ACE 的类型/权限/继承范围）
+- [Function:Change] [2026/8/25] “安全”选项卡支持直接编辑权限：允许/拒绝复选框可勾选（完全继承项置灰），点击“应用/确定”时按位重建该主体的显式 ACE 写回磁盘（保留原有继承范围，新 ACE 默认“此文件夹、子文件夹和文件”），失败弹窗提示；特殊权限仍为只读展示，完整粒度编辑需系统高级安全设置
+- [Function:Change] [2026/8/25] 属性窗口“详细信息”页改为纯 XAML 布局（PropertiesDetailsView）：使用 TableView 以“属性 | 值”两列表格呈现（表头、列、行高、卡片外壳均在 XAML 定义），仅数据读取与本地化在 C# 中完成；新增中英文表头文案
+- [Function:Change] [2026/8/25] 属性窗口其余选项卡全部改为 XAML UserControl：常规（PropertiesGeneralView）、数字签名（PropertiesSignatureView）、安全（PropertiesSecurityView，含权限矩阵与高级对话框）、兼容性（PropertiesCompatibilityView）、以前的版本（PropertiesPreviousVersionsView）；窗口外壳精简为仅标题栏/选项卡/按钮与页面分发，各页界面在 XAML 中定义，仅数据读写、文件系统/注册表/ACL 操作与本地化在 C#；新增签名列表列头与“详细信息”按钮中英文文案
+- [Fix] [2026/8/25] 修复修改受保护系统文件（如 TrustedInstaller 独占权限）权限时的报错：写回 ACL 由 AccessControlSections.All（含审核 SACL，需 SeSecurityPrivilege）改为仅 AccessControlSections.Access（仅 DACL），普通用户不再因缺少 SeSecurityPrivilege 报错，管理员也不再出现“未授权操作”；
+- [Function:Add] [2026/8/25] 修改受保护系统资源（系统目录或属主为 TrustedInstaller/SYSTEM）权限前弹出警告确认框（继续/取消，中英文）
+- [Function:Change] [2026/8/25] 属性窗口改为 MVVM：会话选项卡创建独立 ViewModel（PropertiesGeneral/Signature/Security/Details/Compatibility/PreviousVersionsViewModel），所有数据读取（文件系统/签名/ACL/注册表/卷影副本）、写回逻辑与本地化文本下沉到 ViewModel；各视图 XAML 通过 Binding/Command 绑定 ViewModel，代码隐藏仅保留 DataContext 接线与少数 ContentDialog（纯 UI）；文件/ACL/注册表等操作不再直接在 Views 中完成
+- [Function:Change] [2026/8/25] 属性窗口“兼容性”页设置改用 SettingsCard/SettingsExpander（CommunityToolkit.WinUI.Controls）呈现：兼容模式与简化颜色改为“开关 + 展开选项”卡片，管理员运行/640x480/禁用全屏优化/注册重启/旧版ICC 等为独立开关卡片，高DPI/所有用户为按钮卡片；交互与注册表写回逻辑保持不变
+- [Fix] [2026/8/25] 修复兼容性页下拉框折叠时误显示类型名“KeyValueOption”：WinUI 3 ComboBox 选择框不应用 ItemTemplate 时回退 ToString()，为选项模型重写 ToString() 返回显示文本
+- [Fix] [2026/8/25] 修复兼容性设置写入后系统资源管理器看不到的问题：读写 AppCompatFlags\Layers 时显式使用 64 位注册表视图（RegistryView.Registry64），避免 32 位进程写入被 WOW64 重定向到 HKCU\Software\WOW6432Node 而 64 位资源管理器读不到
+- [Fix] [2026/8/25] 兼容性设置写入进一步加固：同时写入 64/32 位注册表视图，读取时 64 位优先并回退 32 位；写入后校验回读，失败不再静默吞掉而是弹具体错误；修正“注册此程序以重新启动”的标记（REGISTERINGAPPS → REGISTERAPPRESTART，兼容旧标记读取）
+- [Fix] [2026/8/25] 修复 MSIX 打包运行时兼容性设置写入“假成功”：打包应用的 HKCU\Software 写入被重定向到包私有容器，资源管理器读真实注册表看不到；已确认打包桌面应用无法从容器内写系统共享注册表（连经 ShellExecute 启动的 reg.exe 也会被重定向）；改为检测打包模式并在应用时弹出明确警告（需改用「未打包」配置运行才能被资源管理器读取），未打包模式走 RegistryKey 双视图写真实注册表；新增 compat.log 调试日志
+
 ## 1.0.5
 - [Fix] [2026/8/24] 修复“复制文件地址”菜单项被错误放置在“新建”子菜单中的问题：从空白处右键“新建”子菜单与工具栏“新建”下拉菜单中移除（文件右键已有“复制路径”提供同一功能）
 
