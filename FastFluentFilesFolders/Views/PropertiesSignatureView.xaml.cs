@@ -1,4 +1,4 @@
-using FastFluentFilesFolders.ViewModels;
+﻿using FastFluentFilesFolders.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
@@ -15,6 +15,12 @@ namespace FastFluentFilesFolders.Views
 			InitializeComponent();
 			Vm = new PropertiesSignatureViewModel(item);
 			DataContext = Vm;
+			SignerColumn.Header = Vm.SignerColumnHeader;
+			DigestColumn.Header = Vm.DigestColumnHeader;
+			TimestampColumn.Header = Vm.TimestampColumnHeader;
+			CtlSignerColumn.Header = Vm.SignerColumnHeader;
+			CtlDigestColumn.Header = Vm.DigestColumnHeader;
+			CtlTimestampColumn.Header = Vm.TimestampColumnHeader;
 		}
 
 		private void OnEmbeddedDetailsClick(object sender, RoutedEventArgs e)

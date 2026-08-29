@@ -135,6 +135,28 @@ namespace FastFluentFilesFolders.Views
             var items = vm.CurrentFolderContent ?? new();
             var special = vm.IsCurrentFolderSpecial;
 
+            // 后台预构建好的数据源（避免 UI 线程做分组构建 SetItems/RebuildFlat）
+            if (vm.PendingPrebuiltSource != null)
+            {
+                var prebuilt = vm.PendingPrebuiltSource;
+                var prebuiltVersion = vm.PendingPrebuiltVersion;
+                vm.PendingPrebuiltSource = null;
+
+                if (_watchedCollection != null)
+                    _watchedCollection.CollectionChanged -= OnCurrentFolderCollectionChanged;
+                _watchedCollection = items;
+                _watchedCollection.CollectionChanged += OnCurrentFolderCollectionChanged;
+                _lastAppliedGroupedSource = (items, special);
+
+                if (vm.CurrentTab == null || prebuiltVersion == vm.CurrentTab.NavigationVersion)
+                {
+                    FileGrid.UpdateSourcePrebuilt(prebuilt);
+                    if (FileGrid.ItemsSource is GroupedFileList gl)
+                        gl.SetDispatcher(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
+                }
+                return;
+            }
+
             // Deduplicate: skip if same (items reference, special flag) was already applied
             if (_lastAppliedGroupedSource is ({ } lastItems, var lastSpecial) &&
                 ReferenceEquals(lastItems, items) && lastSpecial == special)
@@ -178,6 +200,12 @@ namespace FastFluentFilesFolders.Views
         {
             if (sender is FrameworkElement element && element.DataContext is FileSystemNodeViewModel item && !item.IsPlaceholder)
                 (this.DataContext as MainWindowViewModel)?.OpenItem(item);
+        }
+
+        private void OnCalculateSizeTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            if (sender is FrameworkElement { DataContext: FileSystemNodeViewModel item } && !item.IsPlaceholder)
+                item.CalculateSizeCommand.Execute(null);
         }
 
         private void OnGroupToggleClick(object sender, RoutedEventArgs e)
@@ -259,7 +287,7 @@ namespace FastFluentFilesFolders.Views
 
             flyout.PrimaryCommands.Add(ThemedBtn(ML.CmdCut,   ThemedIconKey("Icon.Cut"),    OnCutClick));
             flyout.PrimaryCommands.Add(ThemedBtn(ML.CmdCopy,   ThemedIconKey("Icon.Copy"),    OnCopyClick));
-            flyout.PrimaryCommands.Add(ThemedBtn(ML.CmdPaste,   ThemedIconKey("Icon.Paste"),   OnPasteClick));
+            flyout.PrimaryCommands.Add(ThemedBtn(ML.CmdPaste,   ThemedIconKey("Icon.Paste"),   OnPasteIntoFolderClick));
             flyout.PrimaryCommands.Add(ThemedBtn(ML.CmdRename, ThemedIconKey("Icon.Rename"),  OnRenameClick));
             flyout.PrimaryCommands.Add(ThemedBtn(ML.CmdDelete,   ThemedIconKey("Icon.Delete"),  OnDeleteClick));
             flyout.PrimaryCommands.Add(RedBtn(ML.CmdPermanentDelete, "\uECC9", OnPermanentDeleteClick));
@@ -725,6 +753,20 @@ namespace FastFluentFilesFolders.Views
         {
             _itemContextFlyout?.Hide();
             _baseContextFlyout?.Hide();
+            ExecutePaste();
+        }
+        // 右键文件夹 → 粘贴 时，目标为被右键的那个文件夹（与资源管理器一致）
+        private void OnPasteIntoFolderClick(object sender, RoutedEventArgs e)
+        {
+            _itemContextFlyout?.Hide();
+            _baseContextFlyout?.Hide();
+            if (FileGrid.SelectedItem is FileSystemNodeViewModel item && item.IsDirectory && !item.IsPlaceholder)
+                (this.DataContext as MainWindowViewModel)?.SetPasteTarget(item.FullPath);
+            ExecutePaste();
+        }
+
+        private void ExecutePaste()
+        {
             var pasteOp = new FileOperationItem
             {
                 Text = App.ML.CmdPaste,
@@ -738,6 +780,7 @@ namespace FastFluentFilesFolders.Views
             AddFileOperation(pasteOp);
             (this.DataContext as MainWindowViewModel)?.PasteCommand.Execute(pasteOp);
         }
+
         private void OnRenameClick(object sender, RoutedEventArgs e)
         {
             _itemContextFlyout?.Hide();
@@ -758,16 +801,57 @@ namespace FastFluentFilesFolders.Views
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
             {
                 var container = FileGrid.ContainerFromItem(item);
-                if (container is TableViewRow row && row.ContentTemplateRoot is UIElement root)
+                if (container is not TableViewRow row || row.ContentTemplateRoot is not UIElement root) return;
+
+                // 找到名字 TextBlock（NameText），取其父 Grid 作为名字单元格
+                var nameText = FindVisualChild<TextBlock>(root);
+                if (nameText == null) return;
+                var cellGrid = nameText.Parent as Grid;
+                if (cellGrid == null) return;
+                if (cellGrid.Children.OfType<TextBox>().Any()) return; // 已在重命名中
+
+                // 动态创建重命名输入框：不在模板里每行实例化，降低首帧实体化成本
+                var textBox = new TextBox
                 {
-                    var textBox = FindVisualChild<TextBox>(root);
-                    if (textBox != null)
-                    {
-                        textBox.Focus(FocusState.Programmatic);
-                        textBox.SelectAll();
-                    }
-                }
+                    Text = item.Name,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0),
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(0, 6, 0, 6),
+                    Foreground = Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush
+                        ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+                };
+                textBox.DataContext = item;
+                textBox.GotFocus += OnRenameTextBoxGotFocus;
+                textBox.LostFocus += OnRenameTextBoxLostFocus;
+                textBox.KeyDown += OnRenameTextBoxKeyDown;
+
+                Grid.SetColumn(textBox, 2);
+                cellGrid.Children.Add(textBox);
+                nameText.Visibility = Visibility.Collapsed;
+
+                // 再跳一次调度（Normal），等布局稳定后再聚焦，避免刚创建就被夺走焦点
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                {
+                    if (textBox.Parent != cellGrid) return;
+                    textBox.Focus(FocusState.Programmatic);
+                    textBox.SelectAll();
+                });
             });
+        }
+
+        private void RemoveRenameTextBox(TextBox tb)
+        {
+            if (tb.Parent is Grid cellGrid)
+            {
+                var nameText = cellGrid.Children.OfType<TextBlock>().FirstOrDefault();
+                if (nameText != null) nameText.Visibility = Visibility.Visible;
+                cellGrid.Children.Remove(tb);
+            }
+            tb.GotFocus -= OnRenameTextBoxGotFocus;
+            tb.LostFocus -= OnRenameTextBoxLostFocus;
+            tb.KeyDown -= OnRenameTextBoxKeyDown;
         }
 
         private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
@@ -810,6 +894,7 @@ namespace FastFluentFilesFolders.Views
                     e.Handled = true;
                     item.IsRenaming = false;
                     (this.DataContext as MainWindowViewModel)?.CancelRename();
+                    RemoveRenameTextBox(tb);
                 }
             }
         }
@@ -818,6 +903,7 @@ namespace FastFluentFilesFolders.Views
         {
             var newName = tb.Text.Trim();
             item.IsRenaming = false;
+            RemoveRenameTextBox(tb);
             if (!string.IsNullOrEmpty(newName) && newName != item.Name)
             {
                 item.Name = newName;

@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -9,6 +9,8 @@ namespace FastFluentFilesFolders.ViewModels
 {
     public partial class Configs : ObservableObject
     {
+        public static readonly bool IsDebugMode = true;
+        public static readonly string Version = "1.0.2";
         private static readonly string DefaultConfigPath =
             Path.Combine(AppContext.BaseDirectory, "Configs", "configs.json");
 
@@ -30,6 +32,8 @@ namespace FastFluentFilesFolders.ViewModels
         [ObservableProperty] private string _defaultOrderMode = "ModifiedDesc";
         [ObservableProperty] private string _language = "zh-Hans";
         [ObservableProperty] private string _systemBackdropMode = "Mica";
+        // 表格内容切换动画：Default = 控件默认过渡；Fade = 整表淡入（掩盖逐行覆盖）；None = 无动画
+        [ObservableProperty] private string _transitionMode = "Fade";
         [ObservableProperty] private System.Collections.ObjectModel.ObservableCollection<string> _timeGroupedFolders = new();
         private static readonly string DefaultDownloadsPath =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
@@ -69,6 +73,7 @@ namespace FastFluentFilesFolders.ViewModels
             DefaultOrderMode = configuration.GetValue("General:DefaultOrderMode", "ModifiedDesc")!;
             Language = configuration.GetValue("General:Language", "zh-Hans")!;
             SystemBackdropMode = configuration.GetValue("Appearance:SystemBackdropMode", "Mica")!;
+            TransitionMode = configuration.GetValue("Appearance:TransitionMode", "Fade")!;
             IfLimitIconLoadingConcurrency = IconParallelLoadingCount > 0;
             var folderArray = configuration.GetSection("Special:TimeGroupedFolders").Get<string[]>();
             TimeGroupedFolders = new System.Collections.ObjectModel.ObservableCollection<string>(
@@ -83,7 +88,8 @@ namespace FastFluentFilesFolders.ViewModels
                 "{\n",
                 "  \"Appearance\": {\n",
                 $"    \"MiddleFilesHeight\": {MiddleFilesHeight},\n",
-                $"    \"SystemBackdropMode\": \"{SystemBackdropMode}\"\n",
+                $"    \"SystemBackdropMode\": \"{SystemBackdropMode}\",\n",
+                $"    \"TransitionMode\": \"{TransitionMode}\"\n",
                 "  },\n",
                 "  \"Advanced\": {\n",
                $"    \"ifUsesWin32APIToGetIcon\": {IfUsesWin32APIToGetIcon.ToString().ToLower()}\n",

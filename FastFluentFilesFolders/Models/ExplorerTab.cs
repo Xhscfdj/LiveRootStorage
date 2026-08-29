@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using FastFluentFilesFolders.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -19,7 +19,7 @@ namespace FastFluentFilesFolders.Models
         [ObservableProperty] private string _path = string.Empty;
 
         /// <summary>当前标签页正在浏览的文件夹节点（可复用，避免反复重建）</summary>
-        public FileSystemNodeViewModel? FolderNode { get; set; }
+        [ObservableProperty] private FileSystemNodeViewModel? _folderNode;
 
         /// <summary>该标签页独立的后退历史</summary>
         public List<string> BackStack { get; } = new();

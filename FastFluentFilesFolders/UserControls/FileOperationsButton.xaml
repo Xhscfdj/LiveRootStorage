@@ -87,15 +87,20 @@
                                                 </Button>
                                             </Grid>
 
-                                            <StackPanel Grid.Row="1" Margin="0,6,0,0"
-                                                        Visibility="{Binding IsInProgress, Converter={StaticResource BoolToVis}}">
-                                                <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
-                                                             Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
-                                                <TextBlock Margin="0,2,0,0" FontSize="11"
-                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding ProgressDisplay}"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
+                                            <Grid Grid.Row="1" Margin="0,6,0,0">
+                                                <StackPanel Visibility="{Binding IsInProgress, Converter={StaticResource BoolToVis}}">
+                                                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
+                                                                 Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                                    <TextBlock Margin="0,2,0,0" FontSize="11"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding ProgressDisplay}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <TextBlock Visibility="{Binding IsError, Converter={StaticResource BoolToVis}}"
+                                                           FontSize="11" TextWrapping="Wrap"
+                                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                           Text="{Binding ErrorMessage}"/>
+                                            </Grid>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

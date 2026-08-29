@@ -25,6 +25,12 @@ namespace FastFluentFilesFolders.ViewModels
         public string Value { get; set; } = "";
     }
 
+    public class TransitionModeItem
+    {
+        public string Value { get; set; } = "";
+        public string Display { get; set; } = "";
+    }
+
     public partial class SettingsViewModel : ObservableObject
     {
         private readonly MultiLanguageStringsViewModel _ml;
@@ -48,6 +54,11 @@ namespace FastFluentFilesFolders.ViewModels
 
         [ObservableProperty]
         private SortModeItem _selectedOrderModeItem;
+
+        public List<TransitionModeItem> TransitionModeItems { get; private set; } = new();
+
+        [ObservableProperty]
+        private TransitionModeItem? _selectedTransitionModeItem;
 
         // 静态字段：NavigationCacheMode=Disabled 后 VM 每次进入都会重建，
         // 用 static 保留解锁状态（原来依赖 Required 缓存保活）。
@@ -95,6 +106,10 @@ namespace FastFluentFilesFolders.ViewModels
 
             var configBackdrop = App.SharedViewModel?.AppConfigs?.SystemBackdropMode ?? "Mica";
             _selectedBackdrop = BackdropOptions.FirstOrDefault(b => b.Value == configBackdrop) ?? BackdropOptions[0];
+
+            BuildTransitionModeItems();
+            var transMode = App.SharedViewModel?.AppConfigs?.TransitionMode ?? "Default";
+            _selectedTransitionModeItem = TransitionModeItems.FirstOrDefault(i => i.Value == transMode) ?? TransitionModeItems[0];
 
             if (App.SharedViewModel?.AppConfigs != null)
                 App.SharedViewModel.AppConfigs.PropertyChanged += OnAppConfigPropertyChanged;
@@ -153,6 +168,13 @@ namespace FastFluentFilesFolders.ViewModels
                 App.SharedViewModel.AppConfigs.DefaultOrderMode = value.Mode.ToString();
         }
 
+        partial void OnSelectedTransitionModeItemChanged(TransitionModeItem? value)
+        {
+            if (value == null) return;
+            if (App.SharedViewModel?.AppConfigs != null)
+                App.SharedViewModel.AppConfigs.TransitionMode = value.Value;
+        }
+
         partial void OnSelectedBackdropChanged(BackdropOption? value)
         {
             if (value == null) return;
@@ -207,6 +229,16 @@ namespace FastFluentFilesFolders.ViewModels
                 new() { Mode = SortMode.ModifiedAsc, Display = _ml.SortModifiedAsc },
                 new() { Mode = SortMode.CreatedDesc, Display = _ml.SortCreatedDesc },
                 new() { Mode = SortMode.CreatedAsc, Display = _ml.SortCreatedAsc },
+            };
+        }
+
+        private void BuildTransitionModeItems()
+        {
+            TransitionModeItems = new List<TransitionModeItem>
+            {
+                new() { Value = "Default", Display = _ml.TransitionModeDefault },
+                new() { Value = "Fade", Display = _ml.TransitionModeFade },
+                new() { Value = "None", Display = _ml.TransitionModeNone },
             };
         }
     }

@@ -4,6 +4,7 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Windowing;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -24,6 +25,7 @@ namespace FastFluentFilesFolders.Views
             InitializeComponent();
             ExtendsContentIntoTitleBar = true;
             SetTitleBar(AppTitleBar);
+            SetWindowIcon();
             RootGrid.DataContext = VM;
             VM.PropertyChanged += OnVMPropertyChanged;
 
@@ -31,6 +33,21 @@ namespace FastFluentFilesFolders.Views
             {
                 VM.AppConfigs.PropertyChanged += OnConfigPropertyChanged;
                 UpdateBackDrop(VM.AppConfigs.SystemBackdropMode);
+            }
+        }
+
+        /// <summary>设置窗口图标（未打包运行不会自动从包清单取图标，需显式设置）。</summary>
+        private void SetWindowIcon()
+        {
+            try
+            {
+                var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+                if (System.IO.File.Exists(iconPath))
+                    AppWindow.SetIcon(iconPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[MainWindow] SetIcon failed: {ex.Message}");
             }
         }
 

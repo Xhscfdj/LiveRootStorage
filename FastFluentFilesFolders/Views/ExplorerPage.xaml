@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="FastFluentFilesFolders.Views.ExplorerPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -34,10 +34,16 @@
                  Margin="8,4,8,0">
             <TabView.TabItemTemplate>
                 <DataTemplate x:DataType="models:ExplorerTab">
-					<TabViewItem Header="{Binding Title}" IsClosable="True">
-					    <TabViewItem.IconSource>
-						    <ImageIconSource ImageSource="{Binding FolderNode.Icon}" />
-					    </TabViewItem.IconSource>
+					<TabViewItem IsClosable="True">
+						<TabViewItem.Header>
+							<StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+								<Image Source="{x:Bind FolderNode.Icon, Mode=OneWay}"
+									   Width="16" Height="16"
+									   VerticalAlignment="Center" />
+								<TextBlock Text="{x:Bind Title, Mode=OneWay}"
+										   VerticalAlignment="Center" />
+							</StackPanel>
+						</TabViewItem.Header>
 					</TabViewItem>
 				</DataTemplate>
             </TabView.TabItemTemplate>

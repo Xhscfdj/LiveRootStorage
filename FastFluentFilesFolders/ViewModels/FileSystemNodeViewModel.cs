@@ -1,10 +1,11 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.WinUI;
-
 using FastFluentFilesFolders.Services;
 using FastFluentFilesFolders.Extensions;
 using FastFluentFilesFolders.Extensions.Interfaces;
+using FastFluentFilesFolders.Helpers;
+using FastFluentFilesFolders.Models;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media;
 using System;
@@ -217,6 +218,10 @@ namespace FastFluentFilesFolders.ViewModels
 		[ObservableProperty] private string _extension = string.Empty;
 		// 图标按需加载：仅当虚拟化列表/树将该行实体化并读取 Icon 时才触发加载，
 		// 避免一次性为整个文件夹的所有项加载图标导致卡顿
+		// 诊断开关（临时）：false = 不加载图标，用于确认“滚动替换”是否由图标异步填充引起。
+#if !RELEASE
+		internal static bool IconLoadingEnabled = true;
+#endif
 		private ImageSource? _icon;
 		private bool _iconRequested;
 		public ImageSource? Icon
@@ -226,10 +231,15 @@ namespace FastFluentFilesFolders.ViewModels
 				if (!_iconRequested && !IsPlaceholder && App.SharedIconProvider != null && _uiDispatcherQueue != null)
 				{
 					_iconRequested = true;
-					// 批量请求：行实体化瞬间会有一批 getter 触发，若逐行入队，
-					// 每个 LoadIconAsync 与赋值排空交错执行，图标会分多批“滚”进来。
-					// 收集到同一调度周期统一处理，缓存命中时一次性铺满。
+					// 诊断开关：临时禁用异步图标加载，确认“滚动/进入时的替换感”是否来自图标逐行填充。
+					// 测试完请改回 true。
+#if !RELEASE
+					if (IconLoadingEnabled)
+						RequestIconLoad(this);
+#endif
+#if RELEASE
 					RequestIconLoad(this);
+#endif
 				}
 				return _icon;
 			}
@@ -753,7 +763,8 @@ namespace FastFluentFilesFolders.ViewModels
 
 		public static List<FileSystemEntryInfo> SafeEnumerateEntries(string path)
 		{
-			var result = new List<FileSystemEntryInfo>();
+			var dirs = new List<FileSystemEntryInfo>();
+			var files = new List<FileSystemEntryInfo>();
 			try
 			{
 				var dirInfo = new DirectoryInfo(path);
@@ -763,14 +774,18 @@ namespace FastFluentFilesFolders.ViewModels
 					{
 						bool isDir = (entry.Attributes & FileAttributes.Directory) != 0;
 						long size = isDir ? 0 : ((FileInfo)entry).Length;
-						result.Add(new FileSystemEntryInfo(
+						var info = new FileSystemEntryInfo(
 							entry.FullName,
 							isDir,
 							size,
 							entry.LastWriteTimeUtc,
 							entry.CreationTimeUtc,
 							(entry.Attributes & FileAttributes.Hidden) != 0,
-							(entry.Attributes & FileAttributes.System) != 0));
+							(entry.Attributes & FileAttributes.System) != 0);
+						if (isDir)
+							dirs.Add(info);
+						else
+							files.Add(info);
 					}
 					catch (Exception ex)
 					{
@@ -782,7 +797,64 @@ namespace FastFluentFilesFolders.ViewModels
 			{
 				Debug.WriteLine($"[SafeEnumerateEntries] {path}: {ex.Message}");
 			}
+
+			// 自己实现排序：目录/文件分别按配置的默认排序方式排好，目录在前、文件在后。
+			// 让 Children 从一开始就是稳定有序的，从源头避免“加载后再整理顺序”造成的替换感。
+			var mode = GetDefaultOrderMode();
+			SortEntries(dirs, mode, isDirectory: true);
+			SortEntries(files, mode, isDirectory: false);
+
+			var result = new List<FileSystemEntryInfo>(dirs.Count + files.Count);
+			result.AddRange(dirs);
+			result.AddRange(files);
 			return result;
+		}
+
+		private static SortMode GetDefaultOrderMode()
+		{
+			var str = App.SharedViewModel?.AppConfigs?.DefaultOrderMode;
+			return Enum.TryParse<SortMode>(str, out var mode) ? mode : SortMode.ModifiedDesc;
+		}
+
+		private static void SortEntries(List<FileSystemEntryInfo> entries, SortMode mode, bool isDirectory)
+		{
+			if (entries.Count <= 1) return;
+			switch (mode)
+			{
+				case SortMode.NameAsc:
+					entries.Sort((a, b) => string.Compare(Path.GetFileName(a.FullPath), Path.GetFileName(b.FullPath), StringComparison.CurrentCultureIgnoreCase));
+					break;
+				case SortMode.NameDesc:
+					entries.Sort((a, b) => string.Compare(Path.GetFileName(b.FullPath), Path.GetFileName(a.FullPath), StringComparison.CurrentCultureIgnoreCase));
+					break;
+				case SortMode.ModifiedAsc:
+					entries.Sort((a, b) => a.LastWriteTimeUtc.CompareTo(b.LastWriteTimeUtc));
+					break;
+				case SortMode.ModifiedDesc:
+					entries.Sort((a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
+					break;
+				case SortMode.CreatedAsc:
+					entries.Sort((a, b) => a.CreationTimeUtc.CompareTo(b.CreationTimeUtc));
+					break;
+				case SortMode.CreatedDesc:
+					entries.Sort((a, b) => b.CreationTimeUtc.CompareTo(a.CreationTimeUtc));
+					break;
+				case SortMode.SizeAsc:
+					if (isDirectory)
+						entries.Sort((a, b) => string.Compare(Path.GetFileName(a.FullPath), Path.GetFileName(b.FullPath), StringComparison.CurrentCultureIgnoreCase));
+					else
+						entries.Sort((a, b) => a.Size.CompareTo(b.Size));
+					break;
+				case SortMode.SizeDesc:
+					if (isDirectory)
+						entries.Sort((a, b) => string.Compare(Path.GetFileName(a.FullPath), Path.GetFileName(b.FullPath), StringComparison.CurrentCultureIgnoreCase));
+					else
+						entries.Sort((a, b) => b.Size.CompareTo(a.Size));
+					break;
+				default:
+					// SortMode.None：保持磁盘枚举顺序，不排序
+					break;
+			}
 		}
 
 		public static bool IsFileAccessible(string Path)
@@ -816,9 +888,14 @@ namespace FastFluentFilesFolders.ViewModels
 			}
 
 			var myPath = FullPath;
+			var timingId = LoadTiming.Begin($"{myPath} (ReloadChildren)");
+			var sw = System.Diagnostics.Stopwatch.StartNew();
 
 			var entries = await Task.Run(() => SafeEnumerateEntries(myPath));
+			LoadTiming.Mark(timingId, "enumerate+sort", sw.ElapsedMilliseconds);
+
 			var (dirNodes, fileNodes) = await BuildChildNodesAsync(entries);
+			LoadTiming.Mark(timingId, "build-nodes(background)", sw.ElapsedMilliseconds);
 
 			var allNodes = new List<FileSystemNodeViewModel>(dirNodes.Count + fileNodes.Count);
 			allNodes.AddRange(dirNodes);
@@ -833,6 +910,8 @@ namespace FastFluentFilesFolders.ViewModels
 				var actualCount = Children.Count(c => !c.IsPlaceholder);
 				ChildrenCountText = actualCount > 0 ? $"[{actualCount}]" : "[?]";
 			});
+			LoadTiming.Mark(timingId, "fill-children(ui)", sw.ElapsedMilliseconds);
+			LoadTiming.End(timingId, sw.ElapsedMilliseconds);
 		}
 
 		/// <summary>

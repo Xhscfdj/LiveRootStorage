@@ -2,9 +2,14 @@ using FastFluentFilesFolders.Helpers;
 using FastFluentFilesFolders.ViewModels;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using WinUI.TableView;
 using SD = WinUI.TableView.SortDirection;
@@ -15,28 +20,143 @@ namespace FastFluentFilesFolders.UserControls
     public class LrsTableView : TableView
     {
         private GroupedFileList? _groupedSource;
+        private Storyboard? _fadeStoryboard;
+        private bool _fadeEnabled;
 
         public LrsTableView()
         {
             AllowLiveShaping = false;
+            // 显式启用虚拟化 + 回收复用：只实例化可见行，避免整表替换时对所有行逐个实例化/绑定
+            // （这是“新表 ~1s 逐行出现”的根因——TableView 可能没在虚拟化）。
+            SetValue(VirtualizingStackPanel.IsVirtualizingProperty, true);
+            VirtualizingStackPanel.SetVirtualizationMode(this, VirtualizationMode.Recycling);
+            Loaded += OnLoaded;
+            Unloaded += OnUnloaded;
+        }
+
+        private void OnLoaded(object sender, RoutedEventArgs e)
+        {
+            var mode = App.SharedViewModel?.AppConfigs?.TransitionMode ?? "Default";
+            ApplyTransitionMode(mode);
+            if (App.SharedViewModel?.AppConfigs != null)
+                App.SharedViewModel.AppConfigs.PropertyChanged += OnConfigPropertyChanged;
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            if (App.SharedViewModel?.AppConfigs != null)
+                App.SharedViewModel.AppConfigs.PropertyChanged -= OnConfigPropertyChanged;
+        }
+
+        private void OnConfigPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(Configs.TransitionMode)) return;
+            var mode = (sender as Configs)?.TransitionMode ?? "Default";
+            DispatcherQueue.TryEnqueue(() => ApplyTransitionMode(mode));
+        }
+
+        /// <summary>
+        /// 切换动画方式：
+        /// Default = 控件默认容器过渡；Fade = 关闭逐行滚动过渡 + 整表淡入；None = 无动画。
+        /// </summary>
+        private void ApplyTransitionMode(string mode)
+        {
+            switch (mode)
+            {
+                case "Fade":
+                    ItemContainerTransitions = new TransitionCollection();
+                    _fadeEnabled = true;
+                    break;
+                case "None":
+                    ItemContainerTransitions = new TransitionCollection();
+                    _fadeEnabled = false;
+                    break;
+                default: // "Default"
+                    ItemContainerTransitions = null; // 清除本地值，回到控件默认过渡
+                    _fadeEnabled = false;
+                    break;
+            }
+        }
+
+        private void FadeInContent()
+        {
+            _fadeStoryboard?.Stop();
+            var sb = new Storyboard();
+            var da = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+                EnableDependentAnimation = true
+            };
+            Storyboard.SetTarget(da, this);
+            Storyboard.SetTargetProperty(da, "Opacity");
+            sb.Children.Add(da);
+            sb.Completed += (_, _) => Opacity = 1;
+            _fadeStoryboard = sb;
+            Opacity = 0;
+            sb.Begin();
         }
 
         public void UpdateSource(ObservableCollection<FileSystemNodeViewModel> items, bool grouped)
         {
-            if (_groupedSource == null)
-            {
-                var source = new GroupedFileList();
-                _groupedSource = source;
-                source.FlatListChanged += OnFlatListChanged;
-                ItemsSource = source;
-            }
+            // 每次切换文件夹都新建一个 GroupedFileList，并先填充完成再整体挂到 ItemsSource。
+            // 关键点：绝不在一个仍被 TableView 订阅的旧源上逐条 Clear/Add —— 那样会产生
+            // “新项逐个替换旧项（旧项来自上一个文件夹）”的滚动替换感。新建源 + 一次性挂载
+            // 让 TableView 只看到一次整体切换。
+            if (_groupedSource != null)
+                _groupedSource.FlatListChanged -= OnFlatListChanged;
 
-            // 整表替换：先断开 ItemsSource（视图清空、无订阅者），再填充（零事件开销），
-            // 最后接回触发一次整表刷新。避免旧实现“Clear + 逐条 Add → N 次 VectorChanged
-            // → 先清空再逐条插入”造成的替换感与分组模式 O(N²) 插入。
-            ItemsSource = null;
-            _groupedSource.SetItems(items, grouped);
-            ItemsSource = _groupedSource;
+            // 切换文件夹前先复位滚动位置，避免 TableView 保留旧偏移造成“新项滚动覆盖老项”。
+            ResetScrollPosition();
+
+            var source = new GroupedFileList();
+            source.FlatListChanged += OnFlatListChanged;
+            source.SetItems(items, grouped);
+
+            _groupedSource = source;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            ItemsSource = source;
+            Helpers.LoadTiming.Mark(0, $"UpdateSource(attach) count={source.Count}", sw.ElapsedMilliseconds);
+            if (_fadeEnabled && source.Count > 0) FadeInContent();
+        }
+
+        /// <summary>
+        /// 使用后台已构建好的 GroupedFileList 整体挂载（UI 线程只做一次 Reset 级切换）。
+        /// </summary>
+        public void UpdateSourcePrebuilt(GroupedFileList source)
+        {
+            if (_groupedSource != null)
+                _groupedSource.FlatListChanged -= OnFlatListChanged;
+
+            ResetScrollPosition();
+
+            source.FlatListChanged += OnFlatListChanged;
+            _groupedSource = source;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            ItemsSource = source;
+            Helpers.LoadTiming.Mark(0, $"UpdateSourcePrebuilt(attach) count={source.Count}", sw.ElapsedMilliseconds);
+
+            // 诊断：挂载后第一次 LayoutUpdated 的时间，直接反映整表首帧布局/实体化耗时（A情况 可能在这里）
+            var swFirstLayout = System.Diagnostics.Stopwatch.StartNew();
+            EventHandler<object>? firstLayout = null;
+            firstLayout = (_, _) =>
+            {
+                LayoutUpdated -= firstLayout;
+                Helpers.LoadTiming.Mark(0, $"first-layout-after-attach(count={source.Count})", swFirstLayout.ElapsedMilliseconds);
+            };
+            LayoutUpdated += firstLayout;
+
+            // 诊断：挂载后约 1s 时实际实例化了多少行（可见行 ~20 → 虚拟化生效；~= item 数 → 没虚拟化）
+            int srcCount = source.Count;
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                int realized = 0;
+                foreach (var _ in FindDescendants<TableViewRow>(this)) realized++;
+                Helpers.LoadTiming.Mark(0, $"realized-rows-after-1s(src={srcCount})", realized);
+            });
+
+            if (_fadeEnabled) FadeInContent();
         }
 
         public void SortBy(string sortPath, bool ascending)
@@ -127,6 +247,28 @@ namespace FastFluentFilesFolders.UserControls
             ItemsSource = null;
             ItemsSource = s;
             args.Handled = true;
+        }
+
+        /// <summary>
+        /// 切换文件夹前把滚动位置复位到顶部。TableView/ListView 内部通常有多个 ScrollViewer
+        /// （表头横向滚动、数据行纵向滚动），只找到第一个可能命中表头那个，导致旧表纵向偏移被保留、
+        /// 新表顺着旧偏移“滚动出现”。这里遍历复位所有 ScrollViewer（含真正滚动数据行的那个）。
+        /// </summary>
+        public void ResetScrollPosition()
+        {
+            foreach (var sv in FindDescendants<ScrollViewer>(this))
+                sv.ChangeView(null, 0, null, true);
+        }
+
+        private static IEnumerable<T> FindDescendants<T>(DependencyObject root) where T : DependencyObject
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is T t) yield return t;
+                foreach (var sub in FindDescendants<T>(child))
+                    yield return sub;
+            }
         }
     }
 }

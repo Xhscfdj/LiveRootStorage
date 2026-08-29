@@ -1,4 +1,4 @@
-using FastFluentFilesFolders.Extensions;
+﻿using FastFluentFilesFolders.Extensions;
 using FastFluentFilesFolders.Extensions.Interfaces;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -29,7 +29,9 @@ namespace FastFluentFilesFolders.Views
             RefreshInstalledPluginsList();
 
             AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSettingsViewKeyDown), true);
-        }
+
+            AppVersionTextBlock.Text = Configs.Version ?? "?";
+		}
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {

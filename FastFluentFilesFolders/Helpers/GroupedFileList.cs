@@ -52,7 +52,8 @@ namespace FastFluentFilesFolders.Helpers
                 var key = string.IsNullOrEmpty(item.SortByTime)
                     ? GetTimeGroup(item.LastModifiedTime)
                     : item.SortByTime;
-                if (!string.IsNullOrEmpty(key))
+                // 仅在实际变化时写回，避免后台构建时对已设置过的 SortByTime 重复触发 PropertyChanged
+                if (!string.IsNullOrEmpty(key) && item.SortByTime != key)
                     item.SortByTime = key;
                 if (!_groupChildren.ContainsKey(key))
                     _groupChildren[key] = new List<FileSystemNodeViewModel>();
@@ -74,7 +75,7 @@ namespace FastFluentFilesFolders.Helpers
             var key = string.IsNullOrEmpty(item.SortByTime)
                 ? GetTimeGroup(item.LastModifiedTime)
                 : item.SortByTime;
-            if (!string.IsNullOrEmpty(key))
+            if (!string.IsNullOrEmpty(key) && item.SortByTime != key)
                 item.SortByTime = key;
             if (!_groupChildren.ContainsKey(key))
                 _groupChildren[key] = new List<FileSystemNodeViewModel>();

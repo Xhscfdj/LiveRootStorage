@@ -6,15 +6,16 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.WinUI;
+using FastFluentFilesFolders.Helpers;
 using FastFluentFilesFolders.Models;
 using FastFluentFilesFolders.Services;
 using FastFluentFilesFolders.Views;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Text;
-using Windows.System;
+//using Microsoft.UI.Xaml;
+//using Microsoft.UI.Xaml.Controls;
+//using Microsoft.UI.Xaml.Input;
+//using Microsoft.UI.Xaml.Media;
+//using Microsoft.UI.Text;
+//using Windows.System;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -161,6 +162,8 @@ namespace FastFluentFilesFolders.ViewModels
 			await _pasteLock.WaitAsync();
 			try
 			{
+				var targetOverride = _pasteTargetOverride;
+				_pasteTargetOverride = null;
 				var (paths, isCut) = await _fileOperator.PasteClipboardFiles();
 				if (paths == null || !paths.Any())
 				{
@@ -171,7 +174,20 @@ namespace FastFluentFilesFolders.ViewModels
 				_uiDispatcherQueue.TryEnqueue(() => { if (op != null) op.IconGlyph = isCut ? "\uE8AB" : "\uE8C8"; });
 
 				var pathList = paths.ToList();
-				var destDir = SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
+				var destDir = targetOverride ?? SelectedFolder?.FullPath ?? CurrentBreadcrumbPath;
+				// 目标路径必须为绝对路径（支持地址栏输入 ../xxx 之类的相对路径后粘贴）
+				if (!string.IsNullOrEmpty(destDir))
+				{
+					if (SelectedFolder != null && !Path.IsPathRooted(destDir))
+						destDir = Path.GetFullPath(Path.Combine(SelectedFolder.FullPath, destDir));
+					else
+						destDir = Path.GetFullPath(destDir);
+				}
+				if (string.IsNullOrEmpty(destDir) || !Directory.Exists(destDir))
+				{
+					FailOperation(op, new DirectoryNotFoundException($"目标文件夹不存在: {destDir}"));
+					return;
+				}
 
 				// 统计待粘贴项的文件总数与总大小，让操作岛显示真实的文件个数与大小
 				var (totalFiles, totalBytes) = await _fileOperator.GetTransferStatsAsync(pathList);
@@ -207,6 +223,13 @@ namespace FastFluentFilesFolders.ViewModels
 				foreach (var srcPath in pathList)
 				{
 					var name = Path.GetFileName(srcPath);
+					if (string.IsNullOrEmpty(name))
+						name = Path.GetFileName(srcPath.TrimEnd('\\', '/'));
+					if (string.IsNullOrEmpty(name))
+					{
+						FailOperation(op, new ArgumentException($"无法确定要粘贴的项目的名称: {srcPath}"));
+						return;
+					}
 					var destPath = Path.Combine(destDir, name);
 					if (!isCut)
 						destPath = GenerateUniquePath(destPath);
@@ -239,7 +262,7 @@ namespace FastFluentFilesFolders.ViewModels
 			catch (Exception ex)
 			{
 				Debug.WriteLine($"[Paste] 粘贴失败: {ex}");
-				FailOperation(op);
+				FailOperation(op, ex);
 			}
 			finally
 			{
@@ -285,7 +308,7 @@ namespace FastFluentFilesFolders.ViewModels
 		/// <summary>
 		/// 标记操作失败。
 		/// </summary>
-		private void FailOperation(FileOperationItem? op)
+		private void FailOperation(FileOperationItem? op, Exception? ex = null)
 		{
 			if (op == null) return;
 			_uiDispatcherQueue.TryEnqueue(() =>
@@ -293,6 +316,7 @@ namespace FastFluentFilesFolders.ViewModels
 				op.Progress = 0;
 				op.Process = ML.FileOpFailed;
 				op.RemainTime = "0";
+				op.ErrorMessage = ex?.Message ?? "";
 				op.State = FileOperationState.Error;
 			});
 		}
@@ -967,6 +991,10 @@ namespace FastFluentFilesFolders.ViewModels
 		}
 		public SemaphoreSlim IconLoadSemaphore = new(30, 30); // 最多30个并发
 		private readonly SemaphoreSlim _pasteLock = new(1, 1);
+		private string? _pasteTargetOverride;
+
+		/// <summary>设置下一次“粘贴”的目标文件夹（右键文件夹→粘贴时使用）。</summary>
+		public void SetPasteTarget(string? fullPath) => _pasteTargetOverride = fullPath;
 		private const int MaxBackDepth = 100;
 		private CancellationTokenSource? _saveConfigCts;
 		private ObservableCollection<FileSystemNodeViewModel> _rootDirectories = new();
@@ -979,6 +1007,11 @@ namespace FastFluentFilesFolders.ViewModels
 		[ObservableProperty] private FileSystemNodeViewModel? _selectedFolder;
 		// 当前表格正在展示其内容的文件夹节点：重复进入同一文件夹时跳过无谓的重建
 		private FileSystemNodeViewModel? _displayedFolderNode;
+
+		// 后台构建完成的表格数据源（GroupedFileList），由 MiddleFilesView.UpdateGroupedSource 消费，
+		// 避免在 UI 线程上做分组构建（SetItems/RebuildFlat）。
+		internal GroupedFileList? PendingPrebuiltSource { get; set; }
+		internal int PendingPrebuiltVersion { get; set; }
 
 		public bool IsCurrentFolderSpecial => SelectedFolder?.WillSplitToDifferentSorts ?? false;
 
@@ -1040,31 +1073,55 @@ namespace FastFluentFilesFolders.ViewModels
 			// 守卫1: 开始异步加载前先检查——过期任务跳过磁盘 I/O
 			if (version.HasValue && version.Value != (CurrentTab?.NavigationVersion ?? -1)) return;
 
+			var timingId = Helpers.LoadTiming.Begin(folder.FullPath);
+			var sw = System.Diagnostics.Stopwatch.StartNew();
+
 			try
 			{
-				// 确保子项已加载（同步等待，确保 Children 已填充）
+				// 导航开始：先更新面包屑等轻量状态；旧表内容保留到新内容就绪后一次性瞬间切换，
+				// 避免“先清空 → 空白等待 → 内容才出现”造成的卡感。
+				await _uiDispatcherQueue.EnqueueAsync(() =>
+				{
+					if (version.HasValue && version.Value != (CurrentTab?.NavigationVersion ?? -1)) return;
+					CurrentBreadcrumbPath = folder.FullPath;
+				});
+				Helpers.LoadTiming.Mark(timingId, "update-breadcrumb(ui)", sw.ElapsedMilliseconds);
+
+				// 确保子项已加载（后台有序枚举 + 后台构建节点）
 				if (!folder.IsLoaded)
 				{
 					await folder.LoadChildrenAsync();
+					Helpers.LoadTiming.Mark(timingId, "load-children(LoadChildrenAsync)", sw.ElapsedMilliseconds);
+				}
+				else
+				{
+					Helpers.LoadTiming.Mark(timingId, "children-already-loaded", sw.ElapsedMilliseconds);
 				}
 
-				// 整表替换：构建新集合一次性赋值（新集合无订阅者，构建零事件开销），
-				// 由 PropertyChanged → UpdateGroupedSource → UpdateSource 做一次整表刷新，
-				// 避免旧实现“先 Clear 清空再逐条 Add”造成的替换感与分组模式 O(N²) 插入。
+				// 先在 UI 线程快照 Children（轻量引用拷贝），再在后台构建分组扁平源，
+				// 最后回到 UI 一次性挂载。避免分组构建（SetItems/RebuildFlat）占用 UI 线程造成迟滞。
+				var items = folder.Children.Where(n => !n.IsPlaceholder).ToList();
+				Helpers.LoadTiming.Mark(timingId, "snapshot-items(ui)", sw.ElapsedMilliseconds);
+				var special = folder.WillSplitToDifferentSorts;
+				var v = version ?? (CurrentTab?.NavigationVersion ?? 1);
+
+				var (prebuilt, newContent) = await Task.Run(() =>
+				{
+					var g = new GroupedFileList();
+					g.SetItems(items, special);
+					var nc = new ObservableCollection<FileSystemNodeViewModel>(items);
+					return (g, nc);
+				});
+				Helpers.LoadTiming.Mark(timingId, "prebuilt-grouped-list(background)", sw.ElapsedMilliseconds);
+
 				await _uiDispatcherQueue.EnqueueAsync(() =>
 				{
-					// 守卫2: UI 线程回写前再检查——过期写入丢弃
-					if (version.HasValue && version.Value != (CurrentTab?.NavigationVersion ?? -1)) return;
-					var newContent = new ObservableCollection<FileSystemNodeViewModel>();
-					foreach (var item in folder.Children)
-					{
-						if (!item.IsPlaceholder)
-							newContent.Add(item);
-					}
+					if (v != (CurrentTab?.NavigationVersion ?? -1)) return;
+					PendingPrebuiltSource = prebuilt;
+					PendingPrebuiltVersion = v;
 					CurrentFolderContent = newContent;
-					CurrentBreadcrumbPath = folder.FullPath;
-					_displayedFolderNode = folder;
 					OnPropertyChanged(nameof(IsCurrentFolderSpecial));
+					_displayedFolderNode = folder;
 					var tab = CurrentTab;
 					if (tab?.PendingSelectPath != null)
 					{
@@ -1075,10 +1132,15 @@ namespace FastFluentFilesFolders.ViewModels
 							SelectItemRequested?.Invoke(target);
 					}
 				});
+				Helpers.LoadTiming.Mark(timingId, "apply-to-table(ui)", sw.ElapsedMilliseconds);
 			}
 			catch (Exception ex)
 			{
 				Debug.WriteLine($"[UpdateCurrentFolderContent] Error: {ex.Message}");
+			}
+			finally
+			{
+				Helpers.LoadTiming.End(timingId, sw.ElapsedMilliseconds);
 			}
 		}
 
@@ -1246,6 +1308,9 @@ namespace FastFluentFilesFolders.ViewModels
 		private void NavigateToPath(string path)
 		{
 			if (IsSearchMode) ExitSearchMode();
+			// 支持相对路径：以当前文件夹为基准解析为绝对路径（如地址栏输入 ..新建文件夹）
+			if (!string.IsNullOrEmpty(path) && !Path.IsPathRooted(path) && SelectedFolder != null)
+				path = Path.GetFullPath(Path.Combine(SelectedFolder.FullPath, path));
 			if (ArchiveHelper.IsArchiveVirtualPath(path, out var archiveFile, out var relative))
 			{
 				NavigateToArchivePath(archiveFile, relative);

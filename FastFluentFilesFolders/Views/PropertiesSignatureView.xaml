@@ -1,10 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <UserControl
     x:Class="FastFluentFilesFolders.Views.PropertiesSignatureView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:vm="using:FastFluentFilesFolders.ViewModels"
+	xmlns:tv="using:WinUI.TableView"
     xmlns:local="using:FastFluentFilesFolders.Views"
     mc:Ignorable="d">
 
@@ -30,26 +32,27 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="16">
-            <StackPanel Spacing="8">
-                <TextBlock Text="{Binding EmbeddedHeader}" FontSize="14" FontWeight="SemiBold" />
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding SignerColumnHeader}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="{Binding DigestColumnHeader}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="2" Text="{Binding TimestampColumnHeader}" FontWeight="SemiBold" />
-                </Grid>
-                <ItemsControl ItemsSource="{Binding EmbeddedRows}" ItemTemplate="{StaticResource SignatureRowTemplate}" />
-                <Button Content="{Binding DetailsButtonLabel}"
-                        HorizontalAlignment="Right"
-                        IsEnabled="{Binding HasEmbeddedDetails}"
-                        Visibility="{Binding HasEmbeddedDetails, Converter={StaticResource BoolToVisibilityConverter}}"
-                        Click="OnEmbeddedDetailsClick" />
-            </StackPanel>
-        </Border>
+			<StackPanel Spacing="8">
+				<TextBlock Text="{Binding EmbeddedHeader}" Style="{StaticResource TitleTextBlockStyle}" />
+				<tv:TableView AutoGenerateColumns="False"
+							ItemsSource="{Binding EmbeddedRows}"
+                            IsReadOnly="True"
+                            SelectionMode="Extended"
+                            SelectionUnit="Row"
+                            CanResizeColumns="True"
+                            CanSortColumns="True"
+                            GridLinesVisibility="None"
+                            HeaderGridLinesVisibility="None"
+                            BorderThickness="0"
+                            Margin="0,10,0,0">
+					<tv:TableView.Columns>
+						<tv:TableViewTextColumn Width="2*" x:Name="SignerColumn" Binding="{Binding Signer}"/>
+						<tv:TableViewTextColumn Width="2*" x:Name="DigestColumn" Binding="{Binding Digest}" />
+						<tv:TableViewTextColumn Width="2*" x:Name="TimestampColumn" Binding="{Binding Timestamp}" />
+					</tv:TableView.Columns>
+				</tv:TableView>
+			</StackPanel>
+		</Border>
 
         <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -57,19 +60,25 @@
                 CornerRadius="8"
                 Padding="16">
             <StackPanel Spacing="8">
-                <TextBlock Text="{Binding CatalogHeader}" FontSize="14" FontWeight="SemiBold" />
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding SignerColumnHeader}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="{Binding DigestColumnHeader}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="2" Text="{Binding TimestampColumnHeader}" FontWeight="SemiBold" />
-                </Grid>
-                <ItemsControl ItemsSource="{Binding CatalogRows}" ItemTemplate="{StaticResource SignatureRowTemplate}" />
-            </StackPanel>
+				<TextBlock Text="{Binding CatalogHeader}" FontSize="14" FontWeight="SemiBold" />
+				<tv:TableView AutoGenerateColumns="False"
+							ItemsSource="{Binding CatalogRows}"
+                            IsReadOnly="True"
+                            SelectionMode="Extended"
+                            SelectionUnit="Row"
+                            CanResizeColumns="True"
+                            CanSortColumns="True"
+                            GridLinesVisibility="None"
+                            HeaderGridLinesVisibility="None"
+                            BorderThickness="0"
+                            Margin="0,10,0,0">
+					<tv:TableView.Columns>
+						<tv:TableViewTextColumn Width="2*" x:Name="CtlSignerColumn" Binding="{Binding Signer}"/>
+						<tv:TableViewTextColumn Width="2*" x:Name="CtlDigestColumn" Binding="{Binding Digest}" />
+						<tv:TableViewTextColumn Width="2*" x:Name="CtlTimestampColumn" Binding="{Binding Timestamp}" />
+					</tv:TableView.Columns>
+				</tv:TableView>
+			</StackPanel>
         </Border>
     </StackPanel>
 </UserControl>

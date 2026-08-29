@@ -296,6 +296,18 @@ namespace FastFluentFilesFolders.UserControls
             if (e.Key == VirtualKey.Enter)
             {
                 var path = PathTextBox.Text;
+                // 支持相对路径（如 ..新建文件夹）：以当前文件夹为基准解析成绝对路径后再导航
+                if (!string.IsNullOrWhiteSpace(path) && !System.IO.Path.IsPathRooted(path) && !string.IsNullOrEmpty(CurrentPath))
+                {
+                    try
+                    {
+                        path = System.IO.Path.GetFullPath(System.IO.Path.Combine(CurrentPath, path));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[LRSBreadcrumb] 解析相对路径失败: {ex.Message}");
+                    }
+                }
                 if (!string.IsNullOrWhiteSpace(path) &&
                     (Directory.Exists(path) || ViewModels.ArchiveHelper.IsArchiveVirtualPath(path)))
                 {

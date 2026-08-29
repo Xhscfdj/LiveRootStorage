@@ -34,6 +34,7 @@ namespace FastFluentFilesFolders.ViewModels
             nameof(PluginsSection),
             nameof(SystemBackdropMode), nameof(BackdropMica), nameof(BackdropMicaAlt),
             nameof(BackdropAcrylic), nameof(BackdropAcrylicThin), nameof(BackdropNone),
+            nameof(TransitionMode), nameof(TransitionModeDefault), nameof(TransitionModeFade), nameof(TransitionModeNone),
             nameof(PluginManagement), nameof(PluginImport), nameof(PluginImportBtn), nameof(PluginInstalled),
             nameof(NavExplorer), nameof(NavPlugins), nameof(AppAuthorCredit),
             nameof(PluginsPageTitle), nameof(PluginsSettingsHeader),
@@ -79,6 +80,10 @@ namespace FastFluentFilesFolders.ViewModels
         public string SortBy => _loc.GetString("SortBy");
         public string AppearanceSection => _loc.GetString("AppearanceSection");
         public string MiddleFilesHeight => _loc.GetString("MiddleFilesHeight");
+        public string TransitionMode => _loc.GetString("TransitionMode");
+        public string TransitionModeDefault => _loc.GetString("TransitionModeDefault");
+        public string TransitionModeFade => _loc.GetString("TransitionModeFade");
+        public string TransitionModeNone => _loc.GetString("TransitionModeNone");
         public string AdvancedSection => _loc.GetString("AdvancedSection");
         public string UseWin32Icon => _loc.GetString("UseWin32Icon");
         public string PerformanceSection => _loc.GetString("PerformanceSection");

@@ -69,6 +69,15 @@
                               DisplayMemberPath="DisplayName" />
                 </ccl:SettingsCard>
 
+                <ccl:SettingsCard Header="{Binding ML.TransitionMode}">
+                    <ccl:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE768;" />
+                    </ccl:SettingsCard.HeaderIcon>
+                    <ComboBox ItemsSource="{Binding TransitionModeItems}"
+                              SelectedItem="{Binding SelectedTransitionModeItem, Mode=TwoWay}"
+                              DisplayMemberPath="Display" />
+                </ccl:SettingsCard>
+
                 <TextBlock Text="{Binding ML.AdvancedSection}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,12,0,0" />
 				<ccl:SettingsCard Header="{Binding ML.UseWin32Icon}">
 					<ccl:SettingsCard.HeaderIcon>
@@ -196,7 +205,7 @@
 						</StackPanel>
 					</ccl:SettingsExpander.Header>
 					<ccl:SettingsExpander.Content>
-						<TextBlock Text="{Binding ML.AppVersion}" />
+						<TextBlock x:Name="AppVersionTextBlock" />
 					</ccl:SettingsExpander.Content>
 					<ccl:SettingsExpander.HeaderIcon>
 						<FontIcon Glyph="&#xE946;" />

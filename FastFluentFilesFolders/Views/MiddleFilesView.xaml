@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="FastFluentFilesFolders.Views.MiddleFilesView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -61,41 +61,28 @@
                 <tv:TableViewTemplateColumn x:Name="ColName" Width="4*" CanSort="True" SortMemberPath="Name">
                     <tv:TableViewTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:FileSystemNodeViewModel">
-                            <Grid DoubleTapped="OnRowDoubleTapped" Opacity="{Binding RowOpacity, Mode=OneWay}">
+                            <Grid DoubleTapped="OnRowDoubleTapped" Opacity="{x:Bind RowOpacity, Mode=OneWay}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Button Grid.Column="0"
-                                        Visibility="{Binding IsPlaceholder, Converter={StaticResource BoolToVisibilityConverter}, Mode=OneWay}"
+                                        Visibility="{x:Bind IsPlaceholder, Converter={StaticResource BoolToVisibilityConverter}, Mode=OneTime}"
                                         Style="{StaticResource SubtleButtonStyle}"
                                         BorderThickness="0" Padding="2" Width="20" Height="20"
-                                        Click="OnGroupToggleClick" Tag="{Binding}">
+                                        Click="OnGroupToggleClick" Tag="{x:Bind}">
                                     <FontIcon FontSize="10"
-                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                        <FontIcon.Glyph>
-                                            <Binding Path="IsGroupExpanded" Mode="OneWay" Converter="{StaticResource ExpandGlyphConverter}"/>
-                                        </FontIcon.Glyph>
-                                    </FontIcon>
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                              Glyph="{x:Bind IsGroupExpanded, Converter={StaticResource ExpandGlyphConverter}, Mode=OneWay}"/>
                                 </Button>
-                                <Image Grid.Column="0" Source="{Binding Icon}"
-									   Margin="0,0,10,0"
-                                       Visibility="{Binding !IsPlaceholder, Converter={StaticResource InvertBoolConverter}, Mode=OneWay}"
+                                <Image Grid.Column="0" Source="{x:Bind Icon, Mode=OneWay}"
+                                       Margin="0,0,10,0"
+                                       Visibility="{x:Bind IsPlaceholder, Converter={StaticResource InvertVisibilityConverter}, Mode=OneTime}"
                                        Width="20" Height="20" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="2" Text="{Binding Name}"
+                                <TextBlock x:Name="NameText" Grid.Column="2" Text="{x:Bind Name, Mode=OneWay}"
                                            VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Visibility="{Binding IsNotRenamingVisibility, Mode=OneWay}"/>
-                                <TextBox Grid.Column="2" Text="{Binding Name, Mode=OneWay}"
-                                         VerticalAlignment="Center" Margin="0"
-                                         BorderThickness="0" Padding="0,6,0,6"
-                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                         Background="Transparent"
-                                         Visibility="{Binding IsRenamingVisibility, Mode=OneWay}"
-                                         GotFocus="OnRenameTextBoxGotFocus"
-                                         LostFocus="OnRenameTextBoxLostFocus"
-                                         KeyDown="OnRenameTextBoxKeyDown"/>
+                                           TextTrimming="CharacterEllipsis"/>
                             </Grid>
                         </DataTemplate>
                     </tv:TableViewTemplateColumn.CellTemplate>
@@ -105,9 +92,9 @@
                     <tv:TableViewTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:FileSystemNodeViewModel">
                             <TextBlock DoubleTapped="OnRowDoubleTapped"
-                                       Text="{Binding LastModifiedTimeString}"
-                                       Visibility="{x:Bind IsPlaceholder, Converter={StaticResource InvertVisibilityConverter}, Mode=OneWay}"
-                                       Opacity="{Binding RowOpacity, Mode=OneWay}"
+                                       Text="{x:Bind LastModifiedTimeString, Mode=OneTime}"
+                                       Visibility="{x:Bind IsPlaceholder, Converter={StaticResource InvertVisibilityConverter}, Mode=OneTime}"
+                                       Opacity="{x:Bind RowOpacity, Mode=OneWay}"
                                        VerticalAlignment="Center"/>
                         </DataTemplate>
                     </tv:TableViewTemplateColumn.CellTemplate>
@@ -117,9 +104,9 @@
                     <tv:TableViewTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:FileSystemNodeViewModel">
                             <TextBlock DoubleTapped="OnRowDoubleTapped"
-                                       Text="{Binding FirstCreatedTimeString}"
-                                       Visibility="{x:Bind IsPlaceholder, Converter={StaticResource InvertVisibilityConverter}, Mode=OneWay}"
-                                       Opacity="{Binding RowOpacity, Mode=OneWay}"
+                                       Text="{x:Bind FirstCreatedTimeString, Mode=OneTime}"
+                                       Visibility="{x:Bind IsPlaceholder, Converter={StaticResource InvertVisibilityConverter}, Mode=OneTime}"
+                                       Opacity="{x:Bind RowOpacity, Mode=OneWay}"
                                        VerticalAlignment="Center"/>
                         </DataTemplate>
                     </tv:TableViewTemplateColumn.CellTemplate>
@@ -128,31 +115,23 @@
                 <tv:TableViewTemplateColumn x:Name="ColSize" Width="*" CanSort="True" SortMemberPath="ExactSize">
                     <tv:TableViewTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="vm:FileSystemNodeViewModel">
-                            <Grid DoubleTapped="OnRowDoubleTapped" Opacity="{Binding RowOpacity, Mode=OneWay}">
+                            <Grid DoubleTapped="OnRowDoubleTapped" Opacity="{x:Bind RowOpacity, Mode=OneWay}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="1" Text="{Binding VisualSize}"
-                                           Visibility="{Binding SizeTextVisibility, Mode=OneWay}"
+                                <TextBlock Grid.Column="1" Text="{x:Bind VisualSize, Mode=OneWay}"
+                                           Visibility="{x:Bind SizeTextVisibility, Mode=OneWay}"
                                            HorizontalAlignment="Right"
                                            VerticalAlignment="Center"/>
-								<Button Grid.Column="1" Content="{Binding ML.CalculateSize}"
-										Background="Transparent"
-										BorderBrush="Transparent"
-										Foreground="{StaticResource AccentAAFillColorSecondaryBrush}"
-                                        Command="{Binding CalculateSizeCommand}"
-                                        Visibility="{Binding CalculateSizeButtonVisibility, Mode=OneWay}"
-                                        x:Name="ViewSizeButton"
-                                        Padding="6,2" VerticalAlignment="Center">
-									<Button.Resources>
-										<StaticResource x:Key="ButtonForeground" ResourceKey="AccentAAFillColorSecondaryBrush"/>
-										<StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="AccentAAFillColorSecondaryBrush"/>
-										<StaticResource x:Key="ButtonForegroundPressed" ResourceKey="AccentAAFillColorSecondaryBrush"/>
-										<StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="AccentAAFillColorSecondaryBrush"/>
-									</Button.Resources>
-								</Button>
-							</Grid>
+                                <TextBlock Grid.Column="1" Text="{x:Bind ML.CalculateSize, Mode=OneTime}"
+                                           Visibility="{x:Bind CalculateSizeButtonVisibility, Mode=OneWay}"
+                                           Foreground="{StaticResource AccentAAFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Center"
+                                           Tapped="OnCalculateSizeTapped"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </Grid>
                         </DataTemplate>
                     </tv:TableViewTemplateColumn.CellTemplate>
                 </tv:TableViewTemplateColumn>

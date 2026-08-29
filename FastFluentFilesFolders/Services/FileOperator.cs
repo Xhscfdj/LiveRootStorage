@@ -272,7 +272,10 @@ namespace FastFluentFilesFolders.Services
 				try
 				{
 					var storageItems = await dataPackageView.GetStorageItemsAsync();
-					var paths = storageItems.Select(item => item.Path).ToList();
+					var paths = storageItems
+						.Select(item => item?.Path)
+						.Where(p => !string.IsNullOrWhiteSpace(p))
+						.ToList();
 					var operation = dataPackageView.RequestedOperation;
 					bool isCut = (operation == DataPackageOperation.Move);
 					return (paths, isCut);
